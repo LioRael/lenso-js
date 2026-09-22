@@ -52,6 +52,7 @@ bun run package-smoke
 npm pack --dry-run ./packages/lenso-bun
 npm pack --dry-run ./packages/lenso-bun-plugin
 npm pack --dry-run ./packages/lenso-web-client
+npm pack --dry-run ./packages/lenso-cli
 ```
 
 Cross-language validation is run from the Rust repository with this checkout
@@ -64,6 +65,6 @@ LENSO_JS_ROOT="$PWD" cargo test \
   --test bun_cross_runtime -- --ignored --test-threads=1
 ```
 
-The repository was split from `LioRael/lenso-bun-adapter`; Git history before
-the split remains available. The old repository is a migration source, not the
+The workspace preserves the relevant histories from `LioRael/lenso-bun-adapter`
+and `LioRael/lenso-cli`. Those repositories are migration sources, not the
 current ownership boundary.
