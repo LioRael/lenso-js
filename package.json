@@ -1,5 +1,5 @@
 {
-  "name": "lenso-bun-adapter-workspace",
+  "name": "lenso-js-workspace",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.2.21",

@@ -1,6 +1,0 @@
-[workspace]
-# The dispatch-only release gate verifies an exact landed SHA, candidate CI,
-# and the complete registry-derived package/version set before publication.
-release_always = true
-changelog_update = false
-git_tag_name = "{{ package }}-v{{ version }}"

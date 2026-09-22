@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LioRael/lenso-bun-adapter.git",
+    "url": "git+https://github.com/LioRael/lenso-js.git",
     "directory": "packages/lenso-bun"
   },
   "sideEffects": false,

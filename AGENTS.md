@@ -1,7 +1,9 @@
 # Agent instructions
 
-This repository owns the Bun Execution Adapter and its transport conformance.
-Keep product Capability semantics in their owning repositories and consume the
-published portable core through versioned dependencies.
+This repository owns the JavaScript and TypeScript authoring surface for
+Lenso. Rust framework, Host, Adapter, and protocol implementations belong in
+`LioRael/lenso`; product Capability semantics remain with their owning Apps.
 
-Use Conventional Commits and locked workspace checks.
+Keep cross-language fixtures here and verify them against an explicit Lenso
+Rust checkout; the Rust test command receives this checkout through
+`LENSO_JS_ROOT`. Use Conventional Commits and the locked Bun workspace checks.

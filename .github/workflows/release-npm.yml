@@ -7,8 +7,16 @@ on:
         description: Full SHA of the landed source commit to verify and release
         required: true
         type: string
+      package:
+        description: Exact workspace package to release
+        required: true
+        type: choice
+        options:
+          - lenso-bun
+          - lenso-bun-plugin
+          - lenso-web-client
       version:
-        description: Exact reviewed @lenso/bun-plugin version
+        description: Exact reviewed package version
         required: true
         type: string
       mode:
@@ -16,9 +24,7 @@ on:
         required: true
         default: dry-run
         type: choice
-        options:
-          - dry-run
-          - publish
+        options: [dry-run, publish]
       publish_confirmation:
         description: Enter publish only when mode is publish
         required: false
@@ -30,13 +36,13 @@ permissions: {}
 jobs:
   publish:
     if: ${{ github.ref == 'refs/heads/main' }}
-    name: Verify @lenso/bun-plugin release
+    name: Verify npm release
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
     env:
-      PACKAGE_PATH: packages/lenso-bun-plugin
+      PACKAGE_PATH: packages/${{ inputs.package }}
       RELEASE_SHA: ${{ inputs.source_sha }}
       RELEASE_VERSION: ${{ inputs.version }}
       RELEASE_MODE: ${{ inputs.mode }}
@@ -63,19 +69,17 @@ jobs:
           test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
           git fetch origin main --no-tags
           git merge-base --is-ancestor "$RELEASE_SHA" origin/main
-          package_version="$(node -p "require('./packages/lenso-bun-plugin/package.json').version")"
+          package_version="$(node -p "require('./$PACKAGE_PATH/package.json').version")"
           test "$package_version" = "$RELEASE_VERSION"
-      - name: Install workspace
-        run: bun install --frozen-lockfile
-      - name: Verify package
+      - run: bun install --frozen-lockfile
+      - name: Verify workspace and package
         run: |
           bun run build
           bun run typecheck
           bun run test:typescript
           bun run package-smoke
           npm pack --dry-run "./$PACKAGE_PATH"
-      - name: Verify npm artifact resolution
-        run: npm publish "./$PACKAGE_PATH" --dry-run --access public --provenance=false
+          npm publish "./$PACKAGE_PATH" --dry-run --access public --provenance=false
       - name: Publish package
         if: ${{ inputs.mode == 'publish' && inputs.publish_confirmation == 'publish' }}
         run: npm publish "./$PACKAGE_PATH" --access public --provenance

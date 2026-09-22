@@ -1,45 +1,22 @@
-# Lenso Bun SDK and Runtime
+# Lenso JavaScript and TypeScript
 
-The Bun authoring and execution surface for Lenso Plugins:
+The JavaScript and TypeScript authoring workspace for Lenso:
 
-- `@lenso/bun` is the supported authoring SDK. It combines the runtime with
-  directly consumable projections of official portable Capabilities.
-- `@lenso/bun-plugin` lets authors register generated, typed Capability
-  Providers without implementing the wire protocol. It remains the low-level
-  runtime package behind the SDK.
-- `lenso-bun-adapter` owns the child-process mechanics used by a Rust Host.
-- `lenso-host-runtime` is the Rust executable inside a prepared TypeScript Host
-  distribution. It installs Bun and native Process Adapters, activates the
-  resolved Generation, and recovers exact durable state.
-- the cross-runtime fixtures prove the generated TypeScript contract against
-  the Rust Kernel and preserve low-level wire conformance coverage.
+- `@lenso/bun` is the supported Bun Plugin authoring SDK and contains the
+  generated projections of selected public Capability contracts.
+- `@lenso/bun-plugin` implements the low-level Bun runtime used by generated
+  Plugin entrypoints.
+- `@lenso/web-client` generates typed browser clients from an explicitly
+  selected public OpenAPI document.
+- `fixtures/bun` owns the JavaScript side of Rust/Bun protocol conformance.
 
-Managed Bun Plugins receive their resolved Capability clients during activation.
-The Adapter exposes a bounded, token-protected loopback import endpoint for that
-single process and dispatches every call through the Kernel dependency handle.
-Imports are keyed by stable requirement identity rather than Capability alone,
-so two uses of the same contract route independently.
-The same TypeScript consumer is covered against both a Bun provider and a
-prebuilt Rust Process provider.
-
-This repository consumes released Lenso core packages and does not own Kernel
-semantics or product Plugins.
-
-## Execution target capability profile
-
-`lenso_bun_adapter::bun_authoring_target_capability_profile()` exports the
-canonical `lenso.execution-target-capability-profile@1` evidence for the
-actual Bun Authoring V2 Adapter. It declares Request, bidirectional Stream,
-Event, Host Imports, and Native Process support. A Host uses that exact
-profile during `RuntimeAdmission`, before the Bundle resolver constructs a
-Plan; it must reject an implementation that additionally requires Workers,
-WebSocket, Wasm Component, Remote, or Browser support. The Adapter never
-selects a fallback at invocation time.
+Rust framework crates, execution adapters, Host executables, and canonical
+protocol fixtures live in [`LioRael/lenso`](https://github.com/LioRael/lenso).
+Product Capability semantics remain in their owning App repositories. This
+separation keeps language tooling together without making a language SDK the
+owner of business policy.
 
 ## Author a Bun Plugin
-
-Install one SDK, implement an official generated Provider interface, and export
-one Plugin definition. The generated entrypoint owns runtime startup:
 
 ```sh
 bun add @lenso/bun
@@ -47,11 +24,8 @@ bun add @lenso/bun
 
 ```ts
 import { definePlugin } from "@lenso/bun";
-import {
-  Jobs,
-  type JobsProvider,
-} from "@lenso/bun/capabilities/jobs";
-import { jobs } from "./jobs.ts"; // `jobs satisfies JobsProvider`.
+import { Jobs, type JobsProvider } from "@lenso/bun/capabilities/jobs";
+import { jobs } from "./jobs.ts";
 
 export default definePlugin({
   provides: [Jobs],
@@ -61,45 +35,14 @@ export default definePlugin({
 });
 ```
 
-Plugin projects created by Lenso contain a generated entrypoint that imports
-this default export and starts the runtime. Authors do not call `serve`, handle
-the process handshake, or implement the transport.
-
-Custom Capability contracts can still be generated during authoring. Official
-Capability projections belong in `@lenso/bun`, not beside Rust crate source.
-
-The Bun runtime accepts generated Request, bidirectional Stream, and Event Providers,
-alongside per-Instance construction, resolved Request, Stream, and Event dependency clients, and
-bounded stop hooks over the production JSON-RPC loopback wire. Stream sessions
-support ordered messages, half-close, terminal outcomes, and cancellation;
-Event publication awaits the handler before acknowledging bounded admission.
-Outbound dependencies use exact Plan-selected routes and stable requirement
-identities for all three interaction kinds. Framed stdio remains a conformance
-and benchmark wire.
-
-The source was extracted from `LioRael/lenso` at monorepo commit
-`67d21499548d07e92c2f6529d7c8345e58c067d9` under ADR 0064. Imported subtrees
-retain their relevant Git history.
-
-## Child process diagnostics
-
-The Rust Host continuously drains Bun stdout and stderr into a bounded
-32-line diagnostic tail. Common credential markers and URL user information
-are redacted before failures become user visible. Lines longer than the
-diagnostic bound are fully suppressed instead of retaining a potentially
-sensitive prefix.
-
-JSON-RPC data requests and ordered Events share a bounded concurrent client.
-Request and stream cancellation use a separate two-slot control client, so a
-full set of slow data requests cannot delay cancellation delivery.
+The generated entrypoint owns runtime startup. Plugin authors do not implement
+the process handshake or transport. Request, bidirectional Stream, Event,
+per-Instance construction, dependency routing, cancellation, and bounded stop
+hooks are covered by the workspace tests and the cross-language suite.
 
 ## Validation
 
 ```sh
-cargo fmt --all -- --check
-cargo check --locked --workspace --all-targets
-cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo test --locked --workspace
 bun install --frozen-lockfile
 bun run --filter '@lenso/bun' capabilities:check
 bun run build
@@ -108,6 +51,19 @@ bun run test:typescript
 bun run package-smoke
 npm pack --dry-run ./packages/lenso-bun
 npm pack --dry-run ./packages/lenso-bun-plugin
-bun build --target bun fixtures/bun/sdk-request-provider.ts --outdir /tmp/lenso-bun-fixtures
-cargo test --locked -p lenso-bun-adapter --test bun_cross_runtime -- --ignored --test-threads=1
+npm pack --dry-run ./packages/lenso-web-client
 ```
+
+Cross-language validation is run from the Rust repository with this checkout
+provided explicitly:
+
+```sh
+LENSO_JS_ROOT="$PWD" cargo test \
+  --manifest-path ../lenso/Cargo.toml \
+  -p lenso-bun-adapter --features js-integration \
+  --test bun_cross_runtime -- --ignored --test-threads=1
+```
+
+The repository was split from `LioRael/lenso-bun-adapter`; Git history before
+the split remains available. The old repository is a migration source, not the
+current ownership boundary.
