@@ -34,8 +34,10 @@ jobs:
       - run: npm pack --dry-run ./packages/lenso-bun
       - run: npm pack --dry-run ./packages/lenso-bun-plugin
       - run: npm pack --dry-run ./packages/lenso-contract-runtime
+      - run: npm pack --dry-run ./packages/lenso-http-egress-workers
       - run: npm pack --dry-run ./packages/lenso-process-protocol
       - run: npm pack --dry-run ./packages/lenso-web-client
+      - run: npm pack --dry-run ./packages/lenso-web-ingress-workers
       - run: npm pack --dry-run ./packages/lenso-workers-runtime
       - name: Build representative Bun fixtures
         run: |

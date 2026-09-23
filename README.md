@@ -14,6 +14,10 @@ The JavaScript and TypeScript authoring workspace for Lenso:
   selected public OpenAPI document.
 - `@lenso/workers-runtime` owns JavaScript event scopes, generation boundaries,
   the buffered HTTP Host facade, and the Workers Host build helper.
+- `@lenso/http-egress-workers` binds the Rust HTTP Egress Plugin to event-owned
+  Fetch without granting network authority.
+- `@lenso/web-ingress-workers` binds an authorized Rust WebSocket session to a
+  Workers `WebSocketPair` under the Runtime event scope.
 - `fixtures/bun` owns the JavaScript side of Rust/Bun protocol conformance.
 
 Rust framework crates, execution adapters, Host executables, and canonical
@@ -63,8 +67,10 @@ bun run package-smoke
 npm pack --dry-run ./packages/lenso-bun
 npm pack --dry-run ./packages/lenso-bun-plugin
 npm pack --dry-run ./packages/lenso-contract-runtime
+npm pack --dry-run ./packages/lenso-http-egress-workers
 npm pack --dry-run ./packages/lenso-process-protocol
 npm pack --dry-run ./packages/lenso-web-client
+npm pack --dry-run ./packages/lenso-web-ingress-workers
 npm pack --dry-run ./packages/lenso-cli
 npm pack --dry-run ./packages/lenso-workers-runtime
 ```
@@ -76,6 +82,8 @@ Rust workspace, and this workflow does not build or assemble them. A separate
 cross-repository packaging gate is required before moving that publication
 path here. The local CLI `npm pack --dry-run` command above checks package
 shape only; it is not publication proof without those executables.
+See [Workers npm release guidance](docs/workers-npm-release.md) for the
+reviewed-archive hash and Trusted Publisher requirements.
 
 Cross-language validation is run from the Rust repository with this checkout
 provided explicitly:
@@ -92,4 +100,8 @@ and `LioRael/lenso-cli`. The two protocol npm package sources were imported
 from `LioRael/lenso-protocols` at `67adbc2ea6b250d9fdda9cc7289180391b41be89`.
 `@lenso/workers-runtime` was imported with its package history from
 `LioRael/lenso-runtime-rust` at `d7eb465baa2e668ed2378fa832aab1769965a3d9`.
-Those repositories are migration sources, not the current ownership boundary.
+Those older source repositories are migration sources, not the current
+ownership boundary.
+The two Workers transport packages were moved from the Rust-owned
+`LioRael/lenso` source after the language ownership cutover; their Rust Plugin
+counterparts remain there.

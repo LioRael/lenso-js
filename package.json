@@ -8,10 +8,10 @@
   ],
   "scripts": {
     "build": "bun run --filter '@lenso/contract-runtime' build && bun run --filter '@lenso/process-protocol' build && bun run --filter '@lenso/bun-plugin' build && bun run --filter '@lenso/bun' build && bun run --filter '@lenso/web-client' build && bun run --filter '@lenso/cli' build && bun run --filter '@lenso/workers-runtime' build",
-    "package-smoke": "bun run --filter '@lenso/contract-runtime' smoke && bun run --filter '@lenso/process-protocol' smoke && bun run --filter '@lenso/bun-plugin' smoke && bun run --filter '@lenso/bun' smoke && bun run --filter '@lenso/web-client' smoke && bun run --filter '@lenso/cli' smoke && bun run --filter '@lenso/workers-runtime' smoke",
+    "package-smoke": "bun run --filter '@lenso/contract-runtime' smoke && bun run --filter '@lenso/process-protocol' smoke && bun run --filter '@lenso/bun-plugin' smoke && bun run --filter '@lenso/bun' smoke && bun run --filter '@lenso/web-client' smoke && bun run --filter '@lenso/cli' smoke && bun run --filter '@lenso/workers-runtime' smoke && bun run --filter '@lenso/http-egress-workers' smoke && bun run --filter '@lenso/web-ingress-workers' smoke",
     "typecheck": "tsc -p tsconfig.json",
     "test:typescript": "bun test packages/lenso-contract-runtime/test packages/lenso-process-protocol/test packages/lenso-bun-plugin/test packages/lenso-bun/test packages/lenso-web-client/test",
-    "test:workers": "node --test packages/lenso-workers-runtime/test/*.test.mjs",
+    "test:workers": "node --test packages/lenso-workers-runtime/test/*.test.mjs packages/lenso-http-egress-workers/event-fetch.test.mjs packages/lenso-web-ingress-workers/test/*.test.mjs",
     "fixtures:check": "node fixtures/check-rust-spec.mjs"
   },
   "dependencies": {

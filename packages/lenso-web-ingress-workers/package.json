@@ -1,0 +1,28 @@
+{
+  "name": "@lenso/web-ingress-workers",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "exports": "./websocket.mjs",
+  "files": [
+    "websocket.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "@lenso/workers-runtime": "0.1.2"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "smoke": "node --test test/package.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LioRael/lenso-js.git",
+    "directory": "packages/lenso-web-ingress-workers"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

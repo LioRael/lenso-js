@@ -58,6 +58,10 @@
       "name": "@lenso/contract-runtime",
       "version": "0.3.0",
     },
+    "packages/lenso-http-egress-workers": {
+      "name": "@lenso/http-egress-workers",
+      "version": "0.1.0",
+    },
     "packages/lenso-process-protocol": {
       "name": "@lenso/process-protocol",
       "version": "0.2.3",
@@ -76,6 +80,13 @@
         "openapi-typescript": "7.13.0",
         "typescript": "7.0.2",
         "typescript-5": "npm:typescript@5.9.3",
+      },
+    },
+    "packages/lenso-web-ingress-workers": {
+      "name": "@lenso/web-ingress-workers",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@lenso/workers-runtime": "0.1.2",
       },
     },
     "packages/lenso-workers-runtime": {
@@ -99,9 +110,13 @@
 
     "@lenso/contract-runtime": ["@lenso/contract-runtime@workspace:packages/lenso-contract-runtime"],
 
+    "@lenso/http-egress-workers": ["@lenso/http-egress-workers@workspace:packages/lenso-http-egress-workers"],
+
     "@lenso/process-protocol": ["@lenso/process-protocol@workspace:packages/lenso-process-protocol"],
 
     "@lenso/web-client": ["@lenso/web-client@workspace:packages/lenso-web-client"],
+
+    "@lenso/web-ingress-workers": ["@lenso/web-ingress-workers@workspace:packages/lenso-web-ingress-workers"],
 
     "@lenso/workers-runtime": ["@lenso/workers-runtime@workspace:packages/lenso-workers-runtime"],
 

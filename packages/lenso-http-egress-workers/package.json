@@ -1,0 +1,28 @@
+{
+  "name": "@lenso/http-egress-workers",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Event-scoped Fetch transport for the Lenso HTTP Egress Plugin",
+  "exports": {
+    ".": "./event-fetch.mjs"
+  },
+  "files": [
+    "event-fetch.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test event-fetch.test.mjs",
+    "smoke": "node --test test/package.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LioRael/lenso-js.git",
+    "directory": "packages/lenso-http-egress-workers"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
