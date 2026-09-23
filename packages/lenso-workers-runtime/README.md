@@ -112,6 +112,16 @@ integrations should create one immutable `createEventScope` for all D1, Fetch an
 cancellation bindings. `createCancellationScope` preserves legacy mutable Host
 composition only; it is not the preferred API.
 
+The buffered and streaming HTTP helpers receive Fetch-normalized
+`Request.headers`. Workers combines repeated non-`Set-Cookie` request fields,
+so neither helper can recover their original field-line boundaries; `getAll()`
+only supports `Set-Cookie` ([Cloudflare Headers API](https://developers.cloudflare.com/workers/runtime-apis/headers/)).
+Endpoints that require those boundaries are unsupported on this target. A local
+workerd run of the [30-vector HTTP fixture](../../fixtures/workers-http-parity/README.md)
+passed 29 raw-network vectors; `repeated-headers` failed. The gate still
+requires 30/30. This result does not establish raw HTTP parity, deployed
+Workers qualification, or production readiness.
+
 Run `npm test` for focused resource, HTTP, and session boundary checks. Actual
 Workers deployment and each Plugin's own conformance remain separate evidence.
 
