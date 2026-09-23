@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "lenso-bun-adapter-workspace",
+      "name": "lenso-js-workspace",
       "dependencies": {
         "@lenso/bun": "workspace:*",
         "@lenso/bun-plugin": "workspace:*",

@@ -69,6 +69,14 @@ npm pack --dry-run ./packages/lenso-cli
 npm pack --dry-run ./packages/lenso-workers-runtime
 ```
 
+The dispatch-only npm release workflow covers packages whose verified output
+is built entirely in this workspace. `@lenso/cli` is not yet a release choice:
+its published archive needs four platform-specific native executables from the
+Rust workspace, and this workflow does not build or assemble them. A separate
+cross-repository packaging gate is required before moving that publication
+path here. The local CLI `npm pack --dry-run` command above checks package
+shape only; it is not publication proof without those executables.
+
 Cross-language validation is run from the Rust repository with this checkout
 provided explicitly:
 

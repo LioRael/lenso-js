@@ -11,9 +11,12 @@ on:
         description: Exact workspace package to release
         required: true
         type: choice
+        # @lenso/cli needs a separate four-platform native binary packaging gate.
         options:
           - lenso-bun
           - lenso-bun-plugin
+          - lenso-contract-runtime
+          - lenso-process-protocol
           - lenso-web-client
           - lenso-workers-runtime
       version:
