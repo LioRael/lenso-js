@@ -7,15 +7,17 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun run --filter '@lenso/bun-plugin' build && bun run --filter '@lenso/bun' build && bun run --filter '@lenso/web-client' build && bun run --filter '@lenso/cli' build",
-    "package-smoke": "bun run --filter '@lenso/bun-plugin' smoke && bun run --filter '@lenso/bun' smoke && bun run --filter '@lenso/web-client' smoke && bun run --filter '@lenso/cli' smoke",
+    "build": "bun run --filter '@lenso/contract-runtime' build && bun run --filter '@lenso/process-protocol' build && bun run --filter '@lenso/bun-plugin' build && bun run --filter '@lenso/bun' build && bun run --filter '@lenso/web-client' build && bun run --filter '@lenso/cli' build",
+    "package-smoke": "bun run --filter '@lenso/contract-runtime' smoke && bun run --filter '@lenso/process-protocol' smoke && bun run --filter '@lenso/bun-plugin' smoke && bun run --filter '@lenso/bun' smoke && bun run --filter '@lenso/web-client' smoke && bun run --filter '@lenso/cli' smoke",
     "typecheck": "tsc -p tsconfig.json",
-    "test:typescript": "bun test packages/lenso-bun-plugin/test packages/lenso-bun/test packages/lenso-web-client/test"
+    "test:typescript": "bun test packages/lenso-contract-runtime/test packages/lenso-process-protocol/test packages/lenso-bun-plugin/test packages/lenso-bun/test packages/lenso-web-client/test",
+    "fixtures:check": "node fixtures/check-rust-spec.mjs"
   },
   "dependencies": {
     "@lenso/bun": "workspace:*",
     "@lenso/bun-plugin": "workspace:*",
-    "@lenso/contract-runtime": "0.3.0"
+    "@lenso/contract-runtime": "workspace:*",
+    "@lenso/process-protocol": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "1.4.0",

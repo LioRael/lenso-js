@@ -7,7 +7,8 @@
       "dependencies": {
         "@lenso/bun": "workspace:*",
         "@lenso/bun-plugin": "workspace:*",
-        "@lenso/contract-runtime": "0.3.0",
+        "@lenso/contract-runtime": "workspace:*",
+        "@lenso/process-protocol": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "1.4.0",
@@ -53,6 +54,14 @@
         "typescript": "7.0.2",
       },
     },
+    "packages/lenso-contract-runtime": {
+      "name": "@lenso/contract-runtime",
+      "version": "0.3.0",
+    },
+    "packages/lenso-process-protocol": {
+      "name": "@lenso/process-protocol",
+      "version": "0.2.3",
+    },
     "packages/lenso-web-client": {
       "name": "@lenso/web-client",
       "version": "0.1.0",
@@ -81,9 +90,9 @@
 
     "@lenso/cli": ["@lenso/cli@workspace:packages/lenso-cli"],
 
-    "@lenso/contract-runtime": ["@lenso/contract-runtime@0.3.0", "", {}, "sha512-3JGwX4fCsHBsP49arxbHKys91f+3AKKN8+Vsn9J4yyXn2oHUDoAlq67yU5ABc1WzchTEYmgki7GmnQx60XkRvQ=="],
+    "@lenso/contract-runtime": ["@lenso/contract-runtime@workspace:packages/lenso-contract-runtime"],
 
-    "@lenso/process-protocol": ["@lenso/process-protocol@0.2.3", "", {}, "sha512-r3xiN0epKoccLq6jFLOa5dmo06rDbWdi1loX8zZpUP2R/H2iiqMvm1aoGmXpNod1KOTF6SlGxPhrjX2M2KbmWQ=="],
+    "@lenso/process-protocol": ["@lenso/process-protocol@workspace:packages/lenso-process-protocol"],
 
     "@lenso/web-client": ["@lenso/web-client@workspace:packages/lenso-web-client"],
 

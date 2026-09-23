@@ -2,6 +2,10 @@
 
 The JavaScript and TypeScript authoring workspace for Lenso:
 
+- `@lenso/contract-runtime` owns portable TypeScript wire values and browser
+  validation shared by generated Capability bindings.
+- `@lenso/process-protocol` owns strict Process and Authoring V2 wire values,
+  proof framing, and execution-target profile validation.
 - `@lenso/bun` is the supported Bun Plugin authoring SDK and contains the
   generated projections of selected public Capability contracts.
 - `@lenso/bun-plugin` implements the low-level Bun runtime used by generated
@@ -12,6 +16,9 @@ The JavaScript and TypeScript authoring workspace for Lenso:
 
 Rust framework crates, execution adapters, Host executables, and canonical
 protocol fixtures live in [`LioRael/lenso`](https://github.com/LioRael/lenso).
+The three checked-in protocol vector snapshots under `fixtures/` mirror that
+Rust spec for standalone package tests; `fixtures:check` compares them with an
+explicit Rust checkout. They are not independent contract sources.
 Product Capability semantics remain in their owning App repositories. This
 separation keeps language tooling together without making a language SDK the
 owner of business policy.
@@ -44,6 +51,7 @@ hooks are covered by the workspace tests and the cross-language suite.
 
 ```sh
 bun install --frozen-lockfile
+LENSO_RUST_ROOT=/absolute/path/to/lenso bun run fixtures:check
 bun run --filter '@lenso/bun' capabilities:check
 bun run build
 bun run typecheck
@@ -51,6 +59,8 @@ bun run test:typescript
 bun run package-smoke
 npm pack --dry-run ./packages/lenso-bun
 npm pack --dry-run ./packages/lenso-bun-plugin
+npm pack --dry-run ./packages/lenso-contract-runtime
+npm pack --dry-run ./packages/lenso-process-protocol
 npm pack --dry-run ./packages/lenso-web-client
 npm pack --dry-run ./packages/lenso-cli
 ```
@@ -66,5 +76,6 @@ LENSO_JS_ROOT="$PWD" cargo test \
 ```
 
 The workspace preserves the relevant histories from `LioRael/lenso-bun-adapter`
-and `LioRael/lenso-cli`. Those repositories are migration sources, not the
-current ownership boundary.
+and `LioRael/lenso-cli`. The two protocol npm package sources were imported
+from `LioRael/lenso-protocols` at `67adbc2ea6b250d9fdda9cc7289180391b41be89`.
+Those repositories are migration sources, not the current ownership boundary.
