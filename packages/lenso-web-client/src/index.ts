@@ -131,11 +131,16 @@ function secureClientMethods<Paths extends {}>(
   });
   for (const method of REQUEST_METHODS) {
     const invoke = methods[method]!;
-    methods[method] = (path: unknown, options?: MethodOptions) => invoke(path, guardedOptions(options));
+    methods[method] = (...args: unknown[]) => {
+      const [path, options] = args;
+      return invoke(path, guardedOptions(options as MethodOptions | undefined));
+    };
   }
   const invokeRequest = methods.request!;
-  methods.request = (method: unknown, path: unknown, options?: MethodOptions) =>
-    invokeRequest(method, path, guardedOptions(options));
+  methods.request = (...args: unknown[]) => {
+    const [method, path, options] = args;
+    return invokeRequest(method, path, guardedOptions(options as MethodOptions | undefined));
+  };
   return client;
 }
 
