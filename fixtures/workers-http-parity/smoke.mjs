@@ -106,7 +106,18 @@ function compare(vector, observed) {
 
 function assess(vector, response, inside = false) {
   if (inside && response.boundary !== "host") {
-    return { name: vector.name, boundary: response.boundary, passed: false, error: response.error };
+    const expectedTraceRejection =
+      response.boundary === "request_constructor_rejected" &&
+      vector.name === "method-TRACE" &&
+      vector.method === "TRACE" &&
+      /^TypeError(?::|$)/.test(response.error ?? "") &&
+      /\b(?:TRACE|forbidden|unsupported)\b/i.test(response.error);
+    return {
+      name: vector.name,
+      boundary: expectedTraceRejection ? "request_api_trace_unsupported" : response.boundary,
+      passed: false,
+      error: response.error,
+    };
   }
   const observed = inside
     ? {
@@ -196,9 +207,11 @@ async function main() {
   } catch (error) {
     healthyAfterLimit = { passed: false, boundary: "transport_error", error: String(error) };
   }
-  const syntheticRequestLimits = inside.filter((result) => result.boundary === "request_api_transformed");
+  const syntheticRequestLimits = inside.filter((result) =>
+    ["request_api_transformed", "request_api_trace_unsupported"].includes(result.boundary),
+  );
   const syntheticFailures = inside.filter(
-    (result) => !result.passed && result.boundary !== "request_api_transformed",
+    (result) => !result.passed && !syntheticRequestLimits.includes(result),
   );
   const passed =
     network.every((result) => result.passed) &&

@@ -52,10 +52,12 @@ provenance before comparing the Wasm-embedded corpus bytes with the Rust source.
 It sends each vector through raw local HTTP, preserving repeated fields and
 attempting TRACE, then through a separately constructed Worker `Request` and
 the same Host. The raw network path must pass every vector. The synthetic
-Request path reports any API normalization as limited support, while its
-representable vectors must pass. A missing Host receipt, constructor rejection,
-or parity mismatch is non-passing. The in-Worker route is a diagnostic, not a
-substitute for the network path. No historical G2 result is inherited.
+Request path reports API normalization as limited support, while its
+representable vectors must pass. A `method-TRACE` constructor `TypeError` that
+identifies TRACE as forbidden or unsupported is also limited support; other
+constructor rejections still fail. A missing Host receipt or parity mismatch is
+non-passing. The in-Worker route is a diagnostic, not a substitute for the
+network path. No historical G2 result is inherited.
 
 The Host limits request/response bodies to 64 KiB, request head to 16 KiB,
 body read to 250 ms, and runner event to 1,000 ms; the Rust bridge independently
