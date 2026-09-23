@@ -65,10 +65,10 @@ export function createLensoWebClient<Paths extends {}>(options: LensoWebClientOp
   const { authentication, fetch: configuredFetch, ...clientOptions } = options;
   const authenticatedOrigin = authentication === undefined ? undefined : configuredOrigin(options.baseUrl);
   const client = createClient<Paths>(authentication?.kind === 'session'
-    ? { ...clientOptions, credentials: 'include', fetch: securedFetch(configuredFetch, authentication, authenticatedOrigin) }
-    : { ...clientOptions, fetch: securedFetch(configuredFetch, authentication, authenticatedOrigin) });
+    ? { ...clientOptions, credentials: 'include' }
+    : clientOptions);
   client.use(transportErrorMiddleware);
-  return client;
+  return secureClientMethods(client, configuredFetch, authentication, authenticatedOrigin);
 }
 
 export function unwrap<Data>(result: LensoResult<Data>): Data {
@@ -102,8 +102,41 @@ function securedFetch(
       }
       request.headers.set(authentication.csrfHeader ?? 'x-csrf-token', token);
     }
-    return transport(request);
+    // Automatic redirects can forward an authenticated mutation's body to a
+    // different origin before the final response is observable. Require the
+    // caller to handle redirects explicitly instead.
+    const guardedRequest = authentication !== undefined && request.redirect === 'follow'
+      ? new Request(request, { redirect: 'error' })
+      : request;
+    return transport(guardedRequest);
   };
+}
+
+type MethodOptions = { readonly fetch?: ClientOptions['fetch']; readonly [key: string]: unknown };
+type UntypedMethod = (...args: unknown[]) => Promise<unknown>;
+const REQUEST_METHODS = ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH', 'TRACE'] as const;
+
+function secureClientMethods<Paths extends {}>(
+  client: Client<Paths>,
+  configuredFetch: ClientOptions['fetch'],
+  authentication: BrowserAuthentication | undefined,
+  authenticatedOrigin: string | undefined,
+): Client<Paths> {
+  // openapi-fetch allows a request-level fetch override. Guard that transport
+  // too, or it bypasses both token/CSRF injection and the final origin check.
+  const methods = client as unknown as Record<string, UntypedMethod>;
+  const guardedOptions = (options?: MethodOptions): MethodOptions => ({
+    ...options,
+    fetch: securedFetch(options?.fetch ?? configuredFetch, authentication, authenticatedOrigin),
+  });
+  for (const method of REQUEST_METHODS) {
+    const invoke = methods[method]!;
+    methods[method] = (path: unknown, options?: MethodOptions) => invoke(path, guardedOptions(options));
+  }
+  const invokeRequest = methods.request!;
+  methods.request = (method: unknown, path: unknown, options?: MethodOptions) =>
+    invokeRequest(method, path, guardedOptions(options));
+  return client;
 }
 
 function configuredOrigin(baseUrl: string): string {

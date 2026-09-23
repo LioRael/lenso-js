@@ -56,6 +56,76 @@ describe('browser client', () => {
     expect(fetched).toBeFalse();
   });
 
+  test('does not let a per-request fetch override bypass the authenticated origin fence', async () => {
+    let fetched = false;
+    const api = createLensoWebClient<Paths>({
+      authentication: { kind: 'bearer', accessToken: () => 'secret' },
+      baseUrl: 'https://app.example.test',
+    });
+    await expect(api.GET('/notes', {
+      baseUrl: 'https://attacker.example',
+      fetch: async () => {
+        fetched = true;
+        return Response.json({ notes: [] });
+      },
+    })).rejects.toThrow('cannot override');
+    expect(fetched).toBeFalse();
+  });
+
+  test('keeps authentication when a request supplies a custom transport', async () => {
+    const api = createLensoWebClient<Paths>({
+      authentication: { kind: 'bearer', accessToken: () => 'secret' },
+      baseUrl: 'https://app.example.test',
+    });
+    const notes = unwrap(await api.GET('/notes', {
+      fetch: async (request) => {
+        expect(request.headers.get('authorization')).toBe('Bearer secret');
+        return Response.json({ notes: ['first'] });
+      },
+    }));
+    expect(notes).toEqual({ notes: ['first'] });
+  });
+
+  test('guards the generic request method and session CSRF with a custom transport', async () => {
+    let fetched = false;
+    const api = createLensoWebClient<Paths>({
+      authentication: { kind: 'session', csrfToken: () => 'csrf-token' },
+      baseUrl: 'https://app.example.test',
+    });
+    await expect(api.request('post', '/notes', {
+      baseUrl: 'https://attacker.example',
+      body: { title: 'Private' },
+      fetch: async () => {
+        fetched = true;
+        return Response.json({ id: 'note-1' }, { status: 201 });
+      },
+    })).rejects.toThrow('cannot override');
+    expect(fetched).toBeFalse();
+
+    const created = unwrap(await api.request('post', '/notes', {
+      body: { title: 'Private' },
+      fetch: async (request) => {
+        expect(request.credentials).toBe('include');
+        expect(request.headers.get('x-csrf-token')).toBe('csrf-token');
+        return Response.json({ id: 'note-1' }, { status: 201 });
+      },
+    }));
+    expect(created).toEqual({ id: 'note-1' });
+  });
+
+  test('disables automatic redirects for authenticated mutations', async () => {
+    const api = createLensoWebClient<Paths>({
+      authentication: { kind: 'bearer', accessToken: () => 'secret' },
+      baseUrl: 'https://app.example.test',
+      fetch: async (request) => {
+        expect(request.redirect).toBe('error');
+        return new Response(null, { status: 307, headers: { location: 'https://attacker.example/receive' } });
+      },
+    });
+    const result = await api.POST('/notes', { body: { title: 'Private' }, redirect: 'follow' });
+    expect(result.response.status).toBe(307);
+  });
+
   test('pins authenticated requests after request-level middleware runs', async () => {
     let fetched = false;
     const api = createLensoWebClient<Paths>({

@@ -31,6 +31,11 @@ const note = unwrap(await api.GET('/notes/{note_id}', {
 
 Session-cookie clients set `credentials: "include"` and must supply a CSRF
 token callback for unsafe methods; a missing token rejects before `fetch`.
+Authenticated requests stay on the configured origin even when a call supplies
+its own `fetch` transport. Automatic redirect following is disabled for
+authenticated requests, including same-origin redirects, so a redirected
+mutation cannot forward its body to a different origin. A custom transport
+must honor `Request.redirect`; handle an expected redirect explicitly.
 `unwrap` converts an RFC 9457-compatible
 error body into `LensoApiError`; transport failures become
 `LensoTransportError`. Pass an `AbortSignal` through the generated method
