@@ -1,5 +1,6 @@
 import * as bindings from "./pkg/lenso_workers_http_parity_host.js";
 import wasmModule from "./pkg/lenso_workers_http_parity_host_bg.wasm";
+import buildProvenance from "./pkg/parity-build.mjs";
 import { createWorkersHttpHost } from "@lenso/workers-runtime";
 
 const host = createWorkersHttpHost({
@@ -88,6 +89,10 @@ export default {
         },
       });
     }
+    if (url.pathname === "/_parity/build") {
+      if (request.method !== "GET") return diagnostic({ error: "method_not_allowed" }, 405);
+      return diagnostic(buildProvenance);
+    }
     if (url.pathname === "/_parity/inside") {
       if (request.method !== "GET") return diagnostic({ error: "method_not_allowed" }, 405);
       const vector = byName.get(url.searchParams.get("name"));
@@ -98,6 +103,8 @@ export default {
         return diagnostic({ boundary: "fixture_error", error: String(error) }, 500);
       }
     }
-    return host.fetch(request, env, ctx);
+    const response = await host.fetch(request, env, ctx);
+    response.headers.set("x-lenso-parity-worker", "true");
+    return response;
   },
 };

@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { reviewedRustRevision } from "./provenance.mjs";
 import { send } from "./transport.mjs";
 
 const base = new URL(process.env.WORKERS_PARITY_URL ?? "http://127.0.0.1:63737");
@@ -19,7 +21,12 @@ if (
 if (!process.env.LENSO_RUST_ROOT) {
   throw new Error("LENSO_RUST_ROOT must identify the reviewed Rust checkout");
 }
+if (!process.env.LENSO_RUST_SHA) {
+  throw new Error("LENSO_RUST_SHA must identify the reviewed Rust commit");
+}
 
+const fixtureDir = dirname(fileURLToPath(import.meta.url));
+const rustSha = reviewedRustRevision(process.env.LENSO_RUST_ROOT, process.env.LENSO_RUST_SHA);
 const corpusPath = resolve(
   process.env.LENSO_RUST_ROOT,
   "tests/fixtures/http-parity-plugin/corpus.json",
@@ -27,6 +34,19 @@ const corpusPath = resolve(
 const source = await readFile(corpusPath);
 const sourceSha256 = createHash("sha256").update(source).digest("hex");
 const origin = base.origin;
+const provenance = JSON.parse(await readFile(resolve(fixtureDir, "pkg/parity-build.json"), "utf8"));
+if (provenance.rust_sha !== rustSha) {
+  throw new Error(`generated Wasm was built from ${provenance.rust_sha}, not ${rustSha}`);
+}
+for (const [name, file] of [
+  ["wasm_sha256", "lenso_workers_http_parity_host_bg.wasm"],
+  ["bindings_sha256", "lenso_workers_http_parity_host.js"],
+]) {
+  const digest = createHash("sha256")
+    .update(await readFile(resolve(fixtureDir, "pkg", file)))
+    .digest("hex");
+  if (provenance[name] !== digest) throw new Error(`${file} differs from build provenance`);
+}
 
 function header(headers, name) {
   if (Array.isArray(headers)) {
@@ -52,7 +72,7 @@ function compare(vector, observed) {
   if (Object.hasOwn(vector, "set_cookie_count") && observed.setCookieCount !== vector.set_cookie_count) {
     failures.push(`set-cookie count: ${observed.setCookieCount} != ${vector.set_cookie_count}`);
   }
-  if (["route", "path", "query", "credential"].some((key) => Object.hasOwn(vector, key))) {
+  if (["route", "path", "query", "credential", "header_values"].some((key) => Object.hasOwn(vector, key))) {
     try {
       const decoded = JSON.parse(observed.body.toString("utf8"));
       for (const [sourceKey, responseKey] of [
@@ -63,6 +83,18 @@ function compare(vector, observed) {
       ]) {
         if (Object.hasOwn(vector, sourceKey) && JSON.stringify(decoded[responseKey]) !== JSON.stringify(vector[sourceKey])) {
           failures.push(`${sourceKey} differs`);
+        }
+      }
+      for (const [name, expectedValues] of Object.entries(vector.header_values ?? {})) {
+        if (!Array.isArray(decoded.headers)) {
+          failures.push("response headers missing from endpoint body");
+          break;
+        }
+        const actualValues = decoded.headers
+          .filter((item) => typeof item.name === "string" && item.name.toLowerCase() === name.toLowerCase())
+          .map((item) => item.value);
+        if (JSON.stringify(actualValues) !== JSON.stringify(expectedValues)) {
+          failures.push(`${name} request header values differ`);
         }
       }
     } catch {
@@ -111,6 +143,10 @@ async function diagnostic(path) {
 }
 
 async function main() {
+  const runningBuild = JSON.parse((await diagnostic("/_parity/build")).body.toString("utf8"));
+  if (JSON.stringify(runningBuild) !== JSON.stringify(provenance)) {
+    throw new Error("running Worker build provenance differs from local generated artifact");
+  }
   const compiledCorpus = (await diagnostic("/_parity/corpus")).body;
   if (!compiledCorpus.equals(source)) {
     throw new Error(`compiled corpus differs from ${corpusPath} (${sourceSha256})`);
@@ -144,8 +180,10 @@ async function main() {
       status: response.status,
       passed:
         response.status === 413 &&
+        header(response.headers, "x-lenso-parity-worker") === "true" &&
         !header(response.headers, "x-lenso-parity-shutdown") &&
-        header(response.headers, "x-content-type-options") === "nosniff",
+        header(response.headers, "x-content-type-options") === "nosniff" &&
+        response.body.equals(Buffer.from('{"error":"payload_too_large"}')),
     };
   } catch (error) {
     oversized = { passed: false, boundary: "transport_error", error: String(error) };
@@ -158,18 +196,27 @@ async function main() {
   } catch (error) {
     healthyAfterLimit = { passed: false, boundary: "transport_error", error: String(error) };
   }
+  const syntheticRequestLimits = inside.filter((result) => result.boundary === "request_api_transformed");
+  const syntheticFailures = inside.filter(
+    (result) => !result.passed && result.boundary !== "request_api_transformed",
+  );
   const passed =
     network.every((result) => result.passed) &&
-    inside.every((result) => result.passed) &&
+    syntheticFailures.length === 0 &&
     oversized.passed &&
     healthyAfterLimit.passed;
   process.stdout.write(`${JSON.stringify({
     passed,
     origin,
+    rust_sha: rustSha,
+    wasm_sha256: provenance.wasm_sha256,
+    bindings_sha256: provenance.bindings_sha256,
     corpus_sha256: sourceSha256,
     corpus_count: corpus.length,
     network,
     inside,
+    synthetic_request_limited_support: syntheticRequestLimits,
+    synthetic_request_failures: syntheticFailures,
     oversized_request: oversized,
     healthy_after_limit: healthyAfterLimit,
   }, null, 2)}\n`);
