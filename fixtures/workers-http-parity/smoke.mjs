@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { reviewedRustRevision } from "./provenance.mjs";
 import { send } from "./transport.mjs";
+import { headerValues, workerRequestCollapsedHeaders } from "./diagnostics.mjs";
 
 const base = new URL(process.env.WORKERS_PARITY_URL ?? "http://127.0.0.1:63737");
 if (
@@ -58,6 +59,7 @@ function header(headers, name) {
 
 function compare(vector, observed) {
   const failures = [];
+  const headerValueDifferences = [];
   if (observed.status !== vector.status) {
     failures.push(`status: ${observed.status} != ${vector.status}`);
   }
@@ -90,21 +92,20 @@ function compare(vector, observed) {
           failures.push("response headers missing from endpoint body");
           break;
         }
-        const actualValues = decoded.headers
-          .filter((item) => typeof item.name === "string" && item.name.toLowerCase() === name.toLowerCase())
-          .map((item) => item.value);
+        const actualValues = headerValues(decoded.headers, name);
         if (JSON.stringify(actualValues) !== JSON.stringify(expectedValues)) {
           failures.push(`${name} request header values differ`);
+          headerValueDifferences.push({ name, expected: expectedValues, observed: actualValues });
         }
       }
     } catch {
       failures.push("invalid JSON response body");
     }
   }
-  return failures;
+  return { failures, headerValueDifferences };
 }
 
-function assess(vector, response, inside = false) {
+function assess(vector, response, inside = false, workerIngressValues) {
   if (inside && response.boundary !== "host") {
     const expectedTraceRejection =
       response.boundary === "request_constructor_rejected" &&
@@ -131,17 +132,24 @@ function assess(vector, response, inside = false) {
         setCookieCount: response.headers["set-cookie"]?.length ?? 0,
       };
   const receipt = header(observed.headers, "x-lenso-parity-shutdown");
-  const failures = compare(vector, observed);
+  const { failures, headerValueDifferences } = compare(vector, observed);
   const inputChanges = inside ? response.input_changes : [];
+  const workerRequestHeaderLoss =
+    !inside && failures.length === headerValueDifferences.length &&
+    workerRequestCollapsedHeaders(headerValueDifferences, workerIngressValues);
   return {
     name: vector.name,
     boundary: !receipt
       ? inside ? "host_without_receipt" : "platform_without_host_receipt"
-      : inputChanges.length ? "request_api_transformed" : failures.length ? "parity_mismatch" : "host",
+      : inputChanges.length ? "request_api_transformed"
+      : workerRequestHeaderLoss ? "worker_request_headers_non_lossless"
+      : failures.length ? "parity_mismatch" : "host",
     passed: Boolean(receipt) && inputChanges.length === 0 && failures.length === 0,
     status: observed.status,
     ...(inputChanges.length ? { input_changes: inputChanges } : {}),
     ...(failures.length ? { failures } : {}),
+    ...(headerValueDifferences.length ? { header_value_differences: headerValueDifferences } : {}),
+    ...(workerIngressValues ? { worker_request_header_values: workerIngressValues } : {}),
   };
 }
 
@@ -165,9 +173,32 @@ async function main() {
   const corpus = JSON.parse(source);
   const network = [];
   const inside = [];
+  const headerProbes = [];
   for (const vector of corpus) {
+    let workerIngressValues;
+    if (vector.header_values) {
+      try {
+        const path = `/_parity/request-headers?name=${encodeURIComponent(vector.name)}`;
+        const probe = await send(origin, { ...vector, uri: path });
+        if (probe.status !== 200) throw new Error(`header probe returned ${probe.status}`);
+        const observed = JSON.parse(probe.body.toString("utf8"));
+        const expectedNames = Object.keys(vector.header_values).sort();
+        const actualNames = observed.header_values && typeof observed.header_values === "object" &&
+          !Array.isArray(observed.header_values) ? Object.keys(observed.header_values).sort() : [];
+        if (observed.name !== vector.name ||
+          JSON.stringify(actualNames) !== JSON.stringify(expectedNames) ||
+          actualNames.some((name) => !Array.isArray(observed.header_values[name]) ||
+            observed.header_values[name].some((value) => typeof value !== "string"))) {
+          throw new Error("header probe returned the wrong vector");
+        }
+        workerIngressValues = observed.header_values;
+        headerProbes.push({ name: vector.name, captured: true, header_values: workerIngressValues });
+      } catch (error) {
+        headerProbes.push({ name: vector.name, captured: false, error: String(error) });
+      }
+    }
     try {
-      network.push(assess(vector, await send(origin, vector)));
+      network.push(assess(vector, await send(origin, vector), false, workerIngressValues));
     } catch (error) {
       network.push({ name: vector.name, boundary: "transport_error", passed: false, error: String(error) });
     }
@@ -215,6 +246,7 @@ async function main() {
   );
   const passed =
     network.every((result) => result.passed) &&
+    headerProbes.every((probe) => probe.captured) &&
     syntheticFailures.length === 0 &&
     oversized.passed &&
     healthyAfterLimit.passed;
@@ -227,6 +259,7 @@ async function main() {
     corpus_sha256: sourceSha256,
     corpus_count: corpus.length,
     network,
+    worker_request_header_probes: headerProbes,
     inside,
     synthetic_request_limited_support: syntheticRequestLimits,
     synthetic_request_failures: syntheticFailures,

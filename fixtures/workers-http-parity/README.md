@@ -59,6 +59,15 @@ constructor rejections still fail. A missing Host receipt or parity mismatch is
 non-passing. The in-Worker route is a diagnostic, not a substitute for the
 network path. No historical G2 result is inherited.
 
+For vectors that assert repeated request-header values, the smoke also sends
+the same raw header lines to a local Worker-ingress diagnostic route. A mismatch
+is labeled `worker_request_headers_non_lossless` only when that route observes
+the same values as the Endpoint; the report includes expected, Endpoint, and
+Worker `Request` values. This label is a failure, not an exception to raw
+network parity. Workers `Headers` combines repeated non-`Set-Cookie` values into
+one comma-delimited value, so the original field-line boundary cannot be
+recovered from a Worker `Request` alone.
+
 The Host limits request/response bodies to 64 KiB, request head to 16 KiB,
 body read to 250 ms, and runner event to 1,000 ms; the Rust bridge independently
 sets a 500 ms ingress deadline and 200 ms shutdown. A failure at either layer

@@ -93,6 +93,18 @@ export default {
       if (request.method !== "GET") return diagnostic({ error: "method_not_allowed" }, 405);
       return diagnostic(buildProvenance);
     }
+    if (url.pathname === "/_parity/request-headers") {
+      if (request.method !== "GET") return diagnostic({ error: "method_not_allowed" }, 405);
+      const vector = byName.get(url.searchParams.get("name"));
+      if (!vector?.header_values) return diagnostic({ error: "unknown_vector" }, 404);
+      const values = Object.fromEntries(Object.keys(vector.header_values).map((name) => [
+        name,
+        [...request.headers]
+          .filter(([key]) => key.toLowerCase() === name.toLowerCase())
+          .map(([, value]) => value),
+      ]));
+      return diagnostic({ name: vector.name, header_values: values });
+    }
     if (url.pathname === "/_parity/inside") {
       if (request.method !== "GET") return diagnostic({ error: "method_not_allowed" }, 405);
       const vector = byName.get(url.searchParams.get("name"));
