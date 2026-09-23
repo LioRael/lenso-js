@@ -1,0 +1,37 @@
+{
+  "name": "@lenso/workers-runtime",
+  "version": "0.1.2",
+  "type": "module",
+  "license": "MIT",
+  "description": "Event-owned resource and generation boundaries for Lenso Workers hosts",
+  "exports": {
+    ".": "./index.mjs",
+    "./host": "./host.mjs",
+    "./http": "./http.mjs",
+    "./runner": "./runner.mjs",
+    "./clock": "./clock.mjs",
+    "./build": "./build.mjs"
+  },
+  "files": [
+    "*.mjs",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "lenso-workers-build": "./build.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LioRael/lenso-runtime-rust.git",
+    "directory": "packages/workers-runtime"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
