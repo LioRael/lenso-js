@@ -15,6 +15,7 @@ on:
           - lenso-bun
           - lenso-bun-plugin
           - lenso-web-client
+          - lenso-workers-runtime
       version:
         description: Exact reviewed package version
         required: true
@@ -77,6 +78,7 @@ jobs:
           bun run build
           bun run typecheck
           bun run test:typescript
+          bun run test:workers
           bun run package-smoke
           npm pack --dry-run "./$PACKAGE_PATH"
           npm publish "./$PACKAGE_PATH" --dry-run --access public --provenance=false

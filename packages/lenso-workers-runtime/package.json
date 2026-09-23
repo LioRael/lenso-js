@@ -17,6 +17,9 @@
     "README.md"
   ],
   "scripts": {
+    "build": "node --check index.mjs && node --check host.mjs && node --check http.mjs && node --check runner.mjs && node --check scope.mjs && node --check clock.mjs && node --check build.mjs",
+    "prepack": "npm run build",
+    "smoke": "node --test test/package.test.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "engines": {
@@ -27,8 +30,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LioRael/lenso-runtime-rust.git",
-    "directory": "packages/workers-runtime"
+    "url": "git+https://github.com/LioRael/lenso-js.git",
+    "directory": "packages/lenso-workers-runtime"
   },
   "publishConfig": {
     "access": "public",

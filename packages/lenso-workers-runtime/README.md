@@ -1,5 +1,10 @@
 # Lenso Workers Runtime
 
+This JavaScript package is maintained in the Lenso JavaScript workspace. Its
+source was imported with history from `LioRael/lenso-runtime-rust` at
+`d7eb465baa2e668ed2378fa832aab1769965a3d9`; the Rust Workers Driver and
+Host integration belong to `LioRael/lenso`.
+
 This package owns event resources, generation admission and reset, and the
 JavaScript timer domain used by the `lenso-workers-driver` Rust crate. It does
 not resolve Plugins, grant network authority, authenticate, or authorize requests.
@@ -115,8 +120,10 @@ Workers deployment and each Plugin's own conformance remain separate evidence.
 `Uint8Array` or `null`; the adapter must finish App shutdown for `closed` before
 clean EOF. Reads begin only on consumer demand, copy the current Wasm memory
 view, and enforce per-chunk and total byte limits. Disconnect cancels the lease;
-a failed generation errors an outstanding body read. The real Rust/Wasm duplex fixture is qualified on the deployed Workers target;
-receipts are in `experiments/workers-g2/evidence/duplex.json`. Supply Web's
+a failed generation errors an outstanding body read. Historical Rust/Wasm
+duplex fixture receipts remain in the source repository at
+`experiments/workers-g2/evidence/duplex.json`; this package migration does not
+requalify a Workers target. Supply Web's
 `createWebSocketTransport()` through `upgradeWebSocket` for authorized status-101
 responses. Web owns that transport and its Capability, not Runtime.
 

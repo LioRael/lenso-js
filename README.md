@@ -12,6 +12,8 @@ The JavaScript and TypeScript authoring workspace for Lenso:
   Plugin entrypoints.
 - `@lenso/web-client` generates typed browser clients from an explicitly
   selected public OpenAPI document.
+- `@lenso/workers-runtime` owns JavaScript event scopes, generation boundaries,
+  the buffered HTTP Host facade, and the Workers Host build helper.
 - `fixtures/bun` owns the JavaScript side of Rust/Bun protocol conformance.
 
 Rust framework crates, execution adapters, Host executables, and canonical
@@ -56,6 +58,7 @@ bun run --filter '@lenso/bun' capabilities:check
 bun run build
 bun run typecheck
 bun run test:typescript
+bun run test:workers
 bun run package-smoke
 npm pack --dry-run ./packages/lenso-bun
 npm pack --dry-run ./packages/lenso-bun-plugin
@@ -63,6 +66,7 @@ npm pack --dry-run ./packages/lenso-contract-runtime
 npm pack --dry-run ./packages/lenso-process-protocol
 npm pack --dry-run ./packages/lenso-web-client
 npm pack --dry-run ./packages/lenso-cli
+npm pack --dry-run ./packages/lenso-workers-runtime
 ```
 
 Cross-language validation is run from the Rust repository with this checkout
@@ -78,4 +82,6 @@ LENSO_JS_ROOT="$PWD" cargo test \
 The workspace preserves the relevant histories from `LioRael/lenso-bun-adapter`
 and `LioRael/lenso-cli`. The two protocol npm package sources were imported
 from `LioRael/lenso-protocols` at `67adbc2ea6b250d9fdda9cc7289180391b41be89`.
+`@lenso/workers-runtime` was imported with its package history from
+`LioRael/lenso-runtime-rust` at `d7eb465baa2e668ed2378fa832aab1769965a3d9`.
 Those repositories are migration sources, not the current ownership boundary.
