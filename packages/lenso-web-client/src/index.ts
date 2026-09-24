@@ -71,7 +71,10 @@ export function createLensoWebClient<Paths extends {}>(options: LensoWebClientOp
   return secureClientMethods(client, configuredFetch, authentication, authenticatedOrigin);
 }
 
-export function unwrap<Data>(result: LensoResult<Data>): Data {
+// Infer from the required success field, not the error branch's optional data?: never.
+export function unwrap<Result extends LensoResult<unknown>>(result: Result): Extract<Result, { readonly data: unknown }>['data'];
+export function unwrap<Data>(result: LensoResult<Data>): Data;
+export function unwrap(result: LensoResult<unknown>): unknown {
   if ('error' in result) throw new LensoApiError(result.response, asProblem(result.error, result.response.status));
   return result.data;
 }
