@@ -29,7 +29,11 @@ bootstrap is needed before Trusted Publishing; do not add a long-lived token to
 this repository.
 
 Versions are explicit in each package manifest. Never overwrite or reuse a
-published version. Publish a compatible Runtime before Web Ingress when their
-versions change together. Verify registry version, integrity, and provenance
-after publication. Workflow success alone does not establish consumer adoption;
-consumer lockfiles and Workers deployment are separate reviewed changes.
+published version. For the first consolidated-repository cohort, publish
+`@lenso/contract-runtime@0.3.1` and `@lenso/process-protocol@0.2.4` before
+`@lenso/bun-plugin@0.4.2`, then `@lenso/bun@0.5.3`. Publish
+`@lenso/workers-runtime@0.1.3` before `@lenso/web-ingress-workers@0.1.1`.
+Each package needs its own reviewed dry run and archive hash. Verify registry
+version, integrity, and provenance after publication. Workflow success alone
+does not establish consumer adoption; consumer lockfiles and Workers deployment
+are separate reviewed changes.

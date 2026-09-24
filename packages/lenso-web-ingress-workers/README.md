@@ -21,7 +21,7 @@ acknowledgement. Incoming platform buffering precedes the message event. HTTP
 response streams, in contrast, pull only on downstream demand.
 
 Run `npm test` after installing the Runtime package. The workspace uses the
-published `@lenso/workers-runtime@0.1.2` contract for its test dependency; it
-does not import a sibling Rust checkout. The source and tests are maintained in
+`@lenso/workers-runtime@0.1.3` package for its test dependency; it does not
+import a sibling Rust checkout. The source and tests are maintained in
 `LioRael/lenso-js`; the corresponding Rust Web Ingress Plugin remains in
 `LioRael/lenso`.

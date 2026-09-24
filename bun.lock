@@ -21,7 +21,7 @@
       "version": "0.5.3",
       "dependencies": {
         "@lenso/bun-plugin": "0.4.2",
-        "@lenso/contract-runtime": "0.3.0",
+        "@lenso/contract-runtime": "0.3.1",
       },
       "devDependencies": {
         "@types/bun": "1.4.0",
@@ -32,8 +32,8 @@
       "name": "@lenso/bun-plugin",
       "version": "0.4.2",
       "dependencies": {
-        "@lenso/contract-runtime": "0.3.0",
-        "@lenso/process-protocol": "0.2.3",
+        "@lenso/contract-runtime": "0.3.1",
+        "@lenso/process-protocol": "0.2.4",
         "typescript": "7.0.2",
       },
       "devDependencies": {
@@ -56,7 +56,7 @@
     },
     "packages/lenso-contract-runtime": {
       "name": "@lenso/contract-runtime",
-      "version": "0.3.0",
+      "version": "0.3.1",
     },
     "packages/lenso-http-egress-workers": {
       "name": "@lenso/http-egress-workers",
@@ -64,7 +64,7 @@
     },
     "packages/lenso-process-protocol": {
       "name": "@lenso/process-protocol",
-      "version": "0.2.3",
+      "version": "0.2.4",
     },
     "packages/lenso-web-client": {
       "name": "@lenso/web-client",
@@ -86,12 +86,12 @@
       "name": "@lenso/web-ingress-workers",
       "version": "0.1.1",
       "devDependencies": {
-        "@lenso/workers-runtime": "0.1.2",
+        "@lenso/workers-runtime": "0.1.3",
       },
     },
     "packages/lenso-workers-runtime": {
       "name": "@lenso/workers-runtime",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "bin": {
         "lenso-workers-build": "./build.mjs",
       },
