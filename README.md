@@ -89,8 +89,9 @@ Cross-language validation is run from the Rust repository with this checkout
 provided explicitly:
 
 ```sh
+export LENSO_RUST_ROOT=/absolute/path/to/lenso
 LENSO_JS_ROOT="$PWD" cargo test \
-  --manifest-path ../lenso/Cargo.toml \
+  --manifest-path "$LENSO_RUST_ROOT/Cargo.toml" \
   -p lenso-bun-adapter --features js-integration \
   --test bun_cross_runtime -- --ignored --test-threads=1
 ```
