@@ -6,6 +6,16 @@ It is a local workerd target probe, not a deployment provider, production
 budget, or proof that Workers streaming, WebSocket, or WASI components work.
 Do not deploy this Worker: its `/_parity/*` diagnostic routes expose the corpus.
 
+The `/_shared/*` test route also runs the same host-API-free Rust business
+handler from `tests/fixtures/portable-http-endpoint/src/lib.rs` as the Native
+loopback and Wasmtime Component tests. Its Workers implementation is a linked
+factory compiled into this target-specific Host, **not** a Wasm Component Guest
+running inside workerd. Run `shared-source-smoke.mjs` after the build and
+local workerd start below. It compares the same success, binary, routing,
+Domain Error and Runtime Failure vectors over raw loopback HTTP and checks
+the Host readiness and clean shutdown receipts. This does not certify general
+Workers Component support or alter the separate raw ingress parity result.
+
 Use an explicit, clean, reviewed `LioRael/lenso` checkout containing
 `tests/fixtures/workers-http-parity-host` and
 `tests/fixtures/http-parity-plugin/corpus.json`. The integrated local Rust
