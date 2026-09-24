@@ -1,7 +1,47 @@
 import * as bindings from "./pkg/lenso_workers_http_parity_host.js";
 import wasmModule from "./pkg/lenso_workers_http_parity_host_bg.wasm";
 import buildProvenance from "./pkg/parity-build.mjs";
-import { createWorkersHttpHost } from "@lenso/workers-runtime";
+import { createEventScope, createWorkersHttpHost } from "@lenso/workers-runtime";
+import { createScopedHttpFetch } from "@lenso/http-egress-workers";
+
+const egressOrigin = "https://egress-fixture.test";
+
+function egressScope() {
+  const proof = { started: 0, aborted: 0 };
+  return createEventScope((scope) => ({
+    upstreamOrigin: egressOrigin,
+    egressProof: proof,
+    httpFetch: createScopedHttpFetch(scope, {
+      fetch(url, init) {
+        if (
+          init.method !== "GET" ||
+          init.redirect !== "manual" ||
+          init.credentials !== "omit" ||
+          init.cache !== "no-store" ||
+          !(init.signal instanceof AbortSignal)
+        ) throw new Error("unexpected HTTP Egress transport policy");
+        proof.started++;
+        if (url === `${egressOrigin}/get`) {
+          return Promise.resolve(new Response(Uint8Array.from([0, 255, 128, 1]), {
+            status: 207,
+            headers: { "content-type": "application/octet-stream" },
+          }));
+        }
+        if (url === `${egressOrigin}/slow`) {
+          return new Promise((_, reject) => {
+            init.signal.addEventListener("abort", () => {
+              proof.aborted++;
+              reject(new DOMException("Request aborted", "AbortError"));
+            }, { once: true });
+          });
+        }
+        throw new Error("unexpected HTTP Egress destination");
+      },
+      setTimeout,
+      clearTimeout,
+    }),
+  }));
+}
 
 const host = createWorkersHttpHost({
   bindings,
@@ -13,6 +53,11 @@ const host = createWorkersHttpHost({
     maxResponseBodyBytes: 65_536,
     maxRequestHeadBytes: 16_384,
     bodyReadTimeoutMs: 250,
+  },
+  createScope(request) {
+    return new URL(request.url).pathname.startsWith("/egress/")
+      ? egressScope()
+      : createEventScope();
   },
   onReceipt(result, response) {
     response.headers.set("x-lenso-parity-ready", String(result.ready));

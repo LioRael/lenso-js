@@ -52,6 +52,17 @@ provenance before comparing the Wasm-embedded corpus bytes with the Rust source.
 The fixture also uses a private Cargo target directory keyed by that SHA;
 otherwise two worktrees sharing a target cache can incorrectly reuse old Wasm
 while stamping it with the new source SHA.
+
+The same Worker separately probes the Plan-bound `lenso.http.client@1` through
+the Rust event Egress Plugin. Run `egress-smoke.mjs` against the local workerd
+origin with `LENSO_RUST_SHA` set to the generated Wasm's reviewed source SHA.
+It checks a binary response, exact-origin refusal before Fetch, cancellation
+that aborts Fetch, and a healthy subsequent event. The upstream is an
+event-local Fetch mock with an exact fixture origin: this proves the real
+workerd JS/Rust/Kernel bridge and its policy handoff, not external networking,
+DNS/TLS behavior, production network ACLs, or a portable Wasm Guest caller.
+The original inbound parity smoke remains separate and can still fail on
+repeated-header normalization.
 It sends each vector through raw local HTTP, preserving repeated fields and
 attempting TRACE, then through a separately constructed Worker `Request` and
 the same Host. The raw network path must pass every vector. The synthetic
