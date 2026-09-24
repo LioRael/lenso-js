@@ -19,8 +19,8 @@ Workers Component support or alter the separate raw ingress parity result.
 Use an explicit, clean, reviewed `LioRael/lenso` checkout containing
 `tests/fixtures/workers-http-parity-host` and
 `tests/fixtures/http-parity-plugin/corpus.json`. The integrated local Rust
-candidate at `8ea03b356a58552bfcf3e70a8a9ec5b7253904e7` has not yet
-been target-qualified; update `LENSO_RUST_SHA` if that candidate changes.
+candidate has not yet been target-qualified; set `LENSO_RUST_SHA` to the exact
+reviewed commit of the Rust checkout used for this run.
 Build the generated module with `@lenso/workers-runtime`'s locked Rust 1.94.0
 and wasm-bindgen 0.2.127 toolchain, then bundle/run this Worker with an
 externally provisioned, digest-recorded Wrangler/workerd cohort. The fixture
