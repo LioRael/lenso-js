@@ -15,10 +15,27 @@ function record(value, name) {
 }
 
 function exactKeys(value, keys, name) {
-  if (Object.keys(value).length !== keys.length ||
+  if (Reflect.ownKeys(value).length !== keys.length ||
       keys.some((key) => !Object.hasOwn(value, key))) {
     throw new TypeError(`${name} has an unexpected shape`);
   }
+}
+
+function zeroDuration(value, name) {
+  const duration = record(value, name);
+  exactKeys(duration, ["secs", "nanos"], name);
+  if (!Object.is(duration.secs, 0) || !Object.is(duration.nanos, 0))
+    throw new TypeError(`${name} must be an exact zero Duration`);
+}
+
+function neverRestartPolicy(value) {
+  const policy = record(value, "restart policy");
+  exactKeys(policy, ["mode", "max_attempts", "window", "backoff", "jitter",
+    "stability"], "restart policy");
+  if (policy.mode !== "never" || !Object.is(policy.max_attempts, 0))
+    throw new TypeError("Workers Component requests do not implement Kernel supervision");
+  for (const name of ["window", "backoff", "jitter", "stability"])
+    zeroDuration(policy[name], `restart policy ${name}`);
 }
 
 function boundedJson(value, name) {
@@ -64,7 +81,8 @@ function selectedInstance(plan, instanceKey) {
       JSON.stringify(instance.required_target_capabilities) !==
         JSON.stringify(REQUIRED_TARGET_CAPABILITIES))
     throw new TypeError("selected Component needs exactly request, wasm-component and workers");
-  if (instance.restart_policy?.mode !== "never" || instance.criticality !== "non_critical")
+  neverRestartPolicy(instance.restart_policy);
+  if (instance.criticality !== "non_critical")
     throw new TypeError("Workers Component requests do not implement Kernel supervision");
   if (instance.execution_lane !== "main")
     throw new TypeError("selected Component is not on the main execution lane");
@@ -88,11 +106,12 @@ function expectedDescriptor(instance) {
         !Array.isArray(operations) || operations.length === 0 ||
         operations.some((name) => typeof name !== "string" || !name) ||
         new Set(operations).size !== operations.length ||
-        Object.entries(kinds).some(([name, kind]) =>
-          !operations.includes(name) || kind !== "request") ||
-        endpoint.default_admission != null ||
-        Object.keys(admissions).length !== 0 ||
-        endpoint.event_admission != null || endpoint.cross_lane_transfer === true) {
+        Reflect.ownKeys(kinds).some((name) =>
+          typeof name !== "string" || !operations.includes(name) ||
+          kinds[name] !== "request") ||
+        endpoint.default_admission !== null ||
+        Reflect.ownKeys(admissions).length !== 0 ||
+        endpoint.event_admission !== null || endpoint.cross_lane_transfer !== false) {
       throw new TypeError("Workers Component requests support only uncustomized Request endpoints");
     }
     return {

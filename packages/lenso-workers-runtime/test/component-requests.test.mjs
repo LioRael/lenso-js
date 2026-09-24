@@ -32,7 +32,14 @@ function plan() {
       required_target_capabilities: ["request", "wasm-component", "workers"],
       execution_class: "lenso.wasm-component@1",
       package_revision: "sha256:example",
-      restart_policy: { mode: "never" },
+      restart_policy: {
+        mode: "never",
+        max_attempts: 0,
+        window: { secs: 0, nanos: 0 },
+        backoff: { secs: 0, nanos: 0 },
+        jitter: { secs: 0, nanos: 0 },
+        stability: { secs: 0, nanos: 0 },
+      },
       criticality: "non_critical",
       execution_lane: "main",
     }],
@@ -111,5 +118,71 @@ test("Guest descriptor and core imports are rejected before request admission", 
     plan: plan(), instanceKey: "endpoint", coreModule: importedCore,
     instantiate: loader.instantiate,
   }), /import-free/);
+  assert.equal(loader.created, 0);
+});
+
+test("endpoint admission flags must have exact unsupported values before Guest construction", () => {
+  const loader = guest({});
+  for (const [name, change] of [
+    ["default admission omitted", (endpoint) => { delete endpoint.default_admission; }],
+    ["default admission undefined", (endpoint) => { endpoint.default_admission = undefined; }],
+    ["event admission omitted", (endpoint) => { delete endpoint.event_admission; }],
+    ["event admission undefined", (endpoint) => { endpoint.event_admission = undefined; }],
+    ["cross-lane transfer omitted", (endpoint) => { delete endpoint.cross_lane_transfer; }],
+    ["cross-lane transfer undefined", (endpoint) => { endpoint.cross_lane_transfer = undefined; }],
+    ["cross-lane transfer string", (endpoint) => { endpoint.cross_lane_transfer = "false"; }],
+    ["cross-lane transfer null", (endpoint) => { endpoint.cross_lane_transfer = null; }],
+    ["cross-lane transfer numeric", (endpoint) => { endpoint.cross_lane_transfer = 0; }],
+    ["cross-lane transfer boxed boolean", (endpoint) => { endpoint.cross_lane_transfer = new Boolean(false); }],
+    ["hidden operation admission", (endpoint) => {
+      Object.defineProperty(endpoint.operation_admissions, "handle", {
+        value: { max_concurrency: 1 }, enumerable: false,
+      });
+    }],
+    ["hidden stream kind", (endpoint) => {
+      Object.defineProperty(endpoint.operation_kinds, "handle", {
+        value: "stream", enumerable: false,
+      });
+    }],
+  ]) {
+    const candidate = plan();
+    change(candidate.plugin_instances[0].provided_capabilities[0]);
+    assert.throws(() => createWorkersComponentRequestAdapter({
+      plan: candidate, instanceKey: "endpoint", coreModule, instantiate: loader.instantiate,
+    }), /unexpected shape|Request endpoints/, name);
+  }
+  assert.equal(loader.created, 0);
+});
+
+test("restart policy must be the exact serialized never policy", () => {
+  const loader = guest({});
+  for (const [name, change] of [
+    ["missing attempts", (policy) => { delete policy.max_attempts; }],
+    ["undefined attempts", (policy) => { policy.max_attempts = undefined; }],
+    ["string attempts", (policy) => { policy.max_attempts = "0"; }],
+    ["nonzero attempts", (policy) => { policy.max_attempts = 1; }],
+    ["extra policy field", (policy) => { policy.fallback = "native"; }],
+    ["hidden policy field", (policy) => {
+      Object.defineProperty(policy, "fallback", { value: "native", enumerable: false });
+    }],
+    ["symbol policy field", (policy) => { policy[Symbol("fallback")] = "native"; }],
+    ["missing duration", (policy) => { delete policy.window; }],
+    ["null duration", (policy) => { policy.window = null; }],
+    ["duration extra field", (policy) => { policy.window.fallback = true; }],
+    ["duration string seconds", (policy) => { policy.window.secs = "0"; }],
+    ["hidden duration field", (policy) => {
+      Object.defineProperty(policy.window, "fallback", { value: true, enumerable: false });
+    }],
+    ["negative zero duration", (policy) => { policy.window.secs = -0; }],
+    ["duration negative nanoseconds", (policy) => { policy.window.nanos = -1; }],
+    ["nonzero duration", (policy) => { policy.stability.nanos = 1; }],
+    ["undefined mode", (policy) => { policy.mode = undefined; }],
+  ]) {
+    const candidate = plan();
+    change(candidate.plugin_instances[0].restart_policy);
+    assert.throws(() => createWorkersComponentRequestAdapter({
+      plan: candidate, instanceKey: "endpoint", coreModule, instantiate: loader.instantiate,
+    }), /restart policy|Kernel supervision/, name);
+  }
   assert.equal(loader.created, 0);
 });
