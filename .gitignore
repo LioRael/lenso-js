@@ -3,3 +3,5 @@
 /packages/*/node_modules
 /packages/*/dist
 /fixtures/workers-http-parity/pkg/
+/fixtures/workers-component-guest/pkg/
+/fixtures/workers-component-guest/.wrangler/
