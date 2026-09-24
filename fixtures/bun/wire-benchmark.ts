@@ -1,5 +1,3 @@
-import { encodeGreetRequest } from "../../crates/lenso-capability-greeting/generated/bindings.ts";
-
 type Wire = "framed-stdio" | "json-rpc-http";
 type RequestCase = {
   name: string;
