@@ -1,15 +1,39 @@
 import core from "./pkg/guest.core.wasm";
 import { instantiate } from "./pkg/guest.js";
 import build from "./pkg/component-build.mjs";
+import { createWorkersComponentRequestAdapter } from "../../packages/lenso-workers-runtime/component-requests.mjs";
 
 const CAPABILITY = "lenso.http.endpoint@1";
 const MAX_BODY = 65_536;
-const expectedDescription = {
-  abi: "lenso.json-request@1",
-  capabilities: [{
-    capability_id: CAPABILITY,
-    descriptor_version: "1.1.0",
-    request_operations: ["describe", "handle"],
+const selectedPlan = {
+  schema_version: 4,
+  terminal_policy: { kind: "required_path" },
+  execution_lanes: [{ id: "main" }],
+  capability_bindings: [],
+  plugin_instances: [{
+    authoring_version: 1,
+    runtime_profile: "lenso.wasm-component@1",
+    instance_key: "endpoint",
+    package_id: "lenso.portable-http-endpoint-fixture",
+    entrypoint: "plugin",
+    configuration: "{}",
+    provided_capabilities: [{
+      capability_id: CAPABILITY,
+      descriptor_version: "1.1.0",
+      operations: ["describe", "handle"],
+      operation_kinds: {},
+      default_admission: null,
+      operation_admissions: {},
+      event_admission: null,
+      cross_lane_transfer: false,
+    }],
+    required_capabilities: [],
+    required_target_capabilities: ["request", "wasm-component", "workers"],
+    execution_class: "lenso.wasm-component@1",
+    package_revision: `sha256:${build.component_sha256}`,
+    restart_policy: { mode: "never" },
+    criticality: "non_critical",
+    execution_lane: "main",
   }],
 };
 const expectedRoutes = [
@@ -20,23 +44,17 @@ const expectedRoutes = [
   { route_id: "evidence", method: "GET", path: "/evidence" },
 ];
 
-function newGuest() {
-  return instantiate((path) => {
-    if (path !== "guest.core.wasm") throw new Error(`unexpected core module: ${path}`);
-    return core;
-  }, {});
-}
-
 function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-// Validation is completed before the Worker handles its first request.
-const probe = newGuest();
-if (!sameJson(JSON.parse(probe.describe()), expectedDescription)) {
-  throw new Error("portable Guest descriptor differs from this fixture's admitted Contract");
-}
-if (!sameJson(JSON.parse(probe.invoke(CAPABILITY, "describe", "{}")), { routes: expectedRoutes })) {
+const component = createWorkersComponentRequestAdapter({
+  plan: selectedPlan,
+  instanceKey: "endpoint",
+  coreModule: core,
+  instantiate,
+});
+if (!sameJson(JSON.parse(component.invoke(CAPABILITY, "describe", "{}")), { routes: expectedRoutes })) {
   throw new Error("portable Guest route table differs from this fixture's admitted routes");
 }
 
@@ -122,9 +140,7 @@ export default {
     const body = await readBoundedBody(request);
     if (body === null) return failure(413, "request_too_large");
     try {
-      // One fresh Component instance per request avoids sharing Guest memory.
-      const guest = newGuest();
-      const result = JSON.parse(guest.invoke(CAPABILITY, "handle", JSON.stringify({
+      const result = JSON.parse(component.invoke(CAPABILITY, "handle", JSON.stringify({
         route_id: route.route_id,
         method: request.method,
         path: url.pathname,
@@ -139,7 +155,10 @@ export default {
       }
       return new Response(decodeBody(result.body), {
         status: result.status,
-        headers: { "x-lenso-component-guest": "true" },
+        headers: {
+          "x-lenso-component-guest": "true",
+          "x-lenso-plan-admitted": "request-only-v4",
+        },
       });
     } catch (error) {
       if (error?.payload === '"rejected"') return failure(502, "endpoint_rejected");

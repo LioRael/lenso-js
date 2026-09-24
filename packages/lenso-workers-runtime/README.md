@@ -10,6 +10,25 @@ JavaScript timer domain used by the `lenso-workers-driver` Rust crate. It does
 not resolve Plugins, grant network authority, authenticate, or authorize requests.
 The buffered HTTP Host entry is available starting with version 0.1.2.
 
+The candidate `./component-requests` entry admits one already-selected
+`lenso.wasm-component@1` Instance from a V4 Plan for the request-only
+`lenso.json-request@1` Guest ABI. It compares the Guest's ready descriptor with
+the Plan before handling requests, requires an import-free precompiled core
+module, and instantiates a fresh Guest for each invocation. It rejects other
+Instances, Capability bindings, Plan-declared Host imports, core Wasm imports,
+Stream/Event endpoints, WebSocket
+requirements, custom admission and Kernel supervision instead of falling back
+to Native. The [local workerd fixture](../../fixtures/workers-component-guest/README.md)
+uses this entry.
+
+This entry does not validate a signed package or Component WIT metadata,
+generate a Plan, run the Kernel,
+provide HTTP routing or Auth policy, enforce Guest memory/turn limits, or build
+a Workers distribution. Its caller must supply the exact verified artifact and
+resolved Plan from its own Host authority. The public `app build/prepare`
+Workers targets remain closed; this entry is a bounded Adapter primitive, not
+an App-selectable Workers target or deployment qualification.
+
 Use `lenso-workers-build --manifest Cargo.toml --package my-host --out-dir pkg`
 to build a consumer Host with its locked dependency graph. It requires Rust
 1.94.0, `wasm32-unknown-unknown`, and wasm-bindgen CLI 0.2.127. `CARGO` and

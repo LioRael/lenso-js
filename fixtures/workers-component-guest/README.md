@@ -32,11 +32,16 @@ directory before a read-only bind mount, then mount a tmpfs over it so Wrangler
 cannot write generated files into the source checkout.
 
 The smoke checks the reviewed Rust SHA, generated Component/core/JS digests,
-the running Worker's embedded build identity, and ten raw-loopback HTTP
-vectors. The public Host build still rejects Workers/wasm targets. This probe
-does not implement a Plan-bound Workers Component Adapter, Host admission,
-full header/auth propagation (only one `x-test` field and bearer scheme are
-probed), request deadline/cancellation, stream/WebSocket,
-or a persistent App's target switch. Its diagnostic build route is test-only;
-never deploy this Worker. The separate raw ingress corpus's repeated-header
-failure remains non-passing.
+the running Worker's embedded build identity, a request-only V4 Plan admission
+marker, and ten raw-loopback HTTP vectors. The Worker supplies a fixture-authored
+Plan projection to `@lenso/workers-runtime/component-requests`; the package
+checks the selected Component and Guest descriptor before readiness and rejects
+Plan-declared Host imports, core Wasm imports, unsupported interactions,
+dependencies, and execution classes. This
+is not a Host-generated, signed-package-derived Plan or a Kernel Execution
+Adapter. The public Host build still rejects Workers/wasm targets. This probe
+does not implement full header/auth propagation (only one `x-test` field and
+bearer scheme are probed), request deadline/cancellation, stream/WebSocket,
+Guest egress, or a persistent App's target switch. Its diagnostic build route
+is test-only; never deploy this Worker. The separate raw ingress corpus's
+repeated-header failure remains non-passing.

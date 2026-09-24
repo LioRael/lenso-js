@@ -9,6 +9,7 @@
     "./host": "./host.mjs",
     "./http": "./http.mjs",
     "./runner": "./runner.mjs",
+    "./component-requests": "./component-requests.mjs",
     "./clock": "./clock.mjs",
     "./build": "./build.mjs"
   },
@@ -17,7 +18,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node --check index.mjs && node --check host.mjs && node --check http.mjs && node --check runner.mjs && node --check scope.mjs && node --check clock.mjs && node --check build.mjs",
+    "build": "node --check index.mjs && node --check host.mjs && node --check http.mjs && node --check runner.mjs && node --check scope.mjs && node --check clock.mjs && node --check component-requests.mjs && node --check build.mjs",
     "prepack": "npm run build",
     "smoke": "node --test test/package.test.mjs",
     "test": "node --test test/*.test.mjs"

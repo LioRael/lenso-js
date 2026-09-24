@@ -73,6 +73,9 @@ for (const [name, method, uri, body, status, expectedBody, headers = []] of case
     if (status === 200 && response.headers["x-lenso-component-guest"] !== "true") {
       failures.push("Guest execution marker missing");
     }
+    if (status === 200 && response.headers["x-lenso-plan-admitted"] !== "request-only-v4") {
+      failures.push("Plan admission marker missing");
+    }
     results.push({ name, passed: failures.length === 0, ...(failures.length ? { failures } : {}) });
   } catch (error) {
     results.push({ name, passed: false, error: String(error) });
