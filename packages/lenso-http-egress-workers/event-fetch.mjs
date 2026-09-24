@@ -40,9 +40,10 @@ export function createEventHttpFetch({ fetch, setTimeout, clearTimeout }) {
         }), interrupted]);
         if (response.redirected) throw failure('transport_failure');
         const headers = [];
+        const encoder = new TextEncoder();
         let headBytes = 0;
         const append = (name, value) => {
-          headBytes += name.length + value.length + 4;
+          headBytes += encoder.encode(name + ': ' + value + '\r\n').byteLength;
           if (headBytes > headLimit) throw failure('response_too_large');
           headers.push([name, value]);
         };

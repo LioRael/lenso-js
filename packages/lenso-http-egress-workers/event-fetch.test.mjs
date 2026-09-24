@@ -67,3 +67,22 @@ test('declared response length and header bounds reject before body consumption'
   const headers = tracked(async () => new Response('', { headers: { 'x-large': 'x'.repeat(3000) } }));
   await assert.rejects(headers.transport(input('https://example.test')).promise, { code: 'response_too_large' });
 });
+
+test('response head limit counts encoded bytes of Unicode header values', async () => {
+  const limits = {
+    max_response_body_bytes: 32,
+    max_response_head_bytes: 30,
+    request_timeout_millis: 200,
+  };
+  const ascii = tracked(async () => new Response(null, { headers: { 'x-note': 'a'.repeat(20) } }));
+  const accepted = await ascii.transport(input('https://example.test', { limits })).promise;
+  assert.deepEqual(accepted.headers, [['x-note', 'a'.repeat(20)]]);
+  assert.equal(ascii.timers.size, 0);
+
+  const unicode = tracked(async () => new Response(null, { headers: { 'x-note': 'é'.repeat(20) } }));
+  await assert.rejects(
+    unicode.transport(input('https://example.test', { limits })).promise,
+    { code: 'response_too_large' },
+  );
+  assert.equal(unicode.timers.size, 0);
+});
