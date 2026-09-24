@@ -249,3 +249,25 @@ test("early body length rejection releases the incoming stream without Kernel ad
   assert.equal(response.status, 413);
   assert.equal(cancelled, true);
 });
+
+test("request head admission counts Unicode header bytes before Host dispatch", async () => {
+  let dispatched = 0;
+  const handler = createHttpHandler({
+    maxRequestHeadBytes: 14,
+    run: async (operation) => operation(),
+    handleHttp() {
+      dispatched++;
+      return { status: 200, headers: [], body: [], shutdown: "clean" };
+    },
+  });
+  const request = (value) =>
+    new Request("https://proof.invalid/x", { headers: { "x-l": value } });
+  assert.equal((await handler(request("e"))).status, 200);
+  assert.equal(dispatched, 1);
+  const unicode = await handler(request("é"));
+  assert.equal(unicode.status, 431);
+  assert.deepEqual(await unicode.json(), {
+    error: "request_header_fields_too_large",
+  });
+  assert.equal(dispatched, 1);
+});

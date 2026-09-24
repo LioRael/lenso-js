@@ -49,6 +49,9 @@ The build script writes the reviewed Rust SHA, Wasm digest, and generated
 JavaScript digest into ignored `pkg/` provenance files. The smoke checks the
 current Rust checkout, local generated files, and the running Worker's embedded
 provenance before comparing the Wasm-embedded corpus bytes with the Rust source.
+The fixture also uses a private Cargo target directory keyed by that SHA;
+otherwise two worktrees sharing a target cache can incorrectly reuse old Wasm
+while stamping it with the new source SHA.
 It sends each vector through raw local HTTP, preserving repeated fields and
 attempting TRACE, then through a separately constructed Worker `Request` and
 the same Host. The raw network path must pass every vector. The synthetic

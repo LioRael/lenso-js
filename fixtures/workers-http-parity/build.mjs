@@ -16,6 +16,10 @@ const modulePath = resolve(outDir, "parity-build.mjs");
 rmSync(metadataPath, { force: true });
 rmSync(modulePath, { force: true });
 
+// Worktrees may share a Cargo target directory. Its mtime-based fingerprint can
+// reuse a Wasm artifact embedding an older corpus after the reviewed SHA moves.
+process.env.CARGO_TARGET_DIR = resolve(outDir, "cargo-target", rustSha);
+
 build({
   manifest: resolve(process.env.LENSO_RUST_ROOT, "tests/fixtures/workers-http-parity-host/Cargo.toml"),
   packageName: "lenso-workers-http-parity-host",
