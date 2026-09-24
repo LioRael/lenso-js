@@ -89,7 +89,8 @@ for (const probe of cases) {
     if (response.status !== 200) failures.push(`status ${response.status}`);
     if (!isDeepStrictEqual(outcome, probe.outcome)) failures.push("outcome differs");
     for (const [name, expected] of Object.entries(expectedHeaders)) {
-      if (response.headers[name]?.[0] !== expected) failures.push(`${name} differs`);
+      const actual = response.headers[name];
+      if ((Array.isArray(actual) ? actual[0] : actual) !== expected) failures.push(`${name} differs`);
     }
     results.push({ name: probe.name, passed: failures.length === 0, ...(failures.length ? { failures, status: response.status, outcome } : {}) });
   } catch (error) {
