@@ -103,6 +103,32 @@ test("authoring V2 requires a trusted exact Descriptor digest and matches the Gu
   assert.equal(adapter.invoke(CAPABILITY, "handle", "{}"), '"handle:{}"');
 });
 
+test("sparse operation kinds retain the Plan default Request meaning in V1 and V2", () => {
+  for (const authoringVersion of [1, 2]) {
+    const selected = plan();
+    selected.plugin_instances[0].authoring_version = authoringVersion;
+    selected.plugin_instances[0].provided_capabilities[0].operation_kinds = { handle: "request" };
+    const loader = guest({
+      abi: "lenso.json-request@1",
+      capabilities: [{
+        capability_id: CAPABILITY, descriptor_version: "1.1.0",
+        ...(authoringVersion === 2 ? { descriptor_digest: DESCRIPTOR_DIGEST } : {}),
+        request_operations: ["describe", "handle"],
+      }],
+    });
+    const args = {
+      plan: selected, instanceKey: "endpoint", coreModule, instantiate: loader.instantiate,
+      ...(authoringVersion === 2 ? {
+        expectedDescriptorDigests: { [CAPABILITY]: DESCRIPTOR_DIGEST },
+      } : {}),
+    };
+    const adapter = createWorkersComponentRequestAdapter(args);
+    assert.equal(adapter.invoke(CAPABILITY, "describe", "{}"), '"describe:{}"');
+    selected.plugin_instances[0].provided_capabilities[0].operation_kinds.unknown = "request";
+    assert.throws(() => createWorkersComponentRequestAdapter(args), /Request endpoints/);
+  }
+});
+
 test("authoring V2 rejects missing, unexpected or malformed trusted digest before Guest creation", () => {
   const selected = plan();
   selected.plugin_instances[0].authoring_version = 2;
