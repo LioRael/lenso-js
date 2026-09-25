@@ -301,7 +301,7 @@ export function createKnowledgeSettingsLocalWorkerAdapter({
     async handle(request) {
       const deadlineAt = performance.now() + bridgeTimeoutMs;
       const url = new URL(request.url);
-      if (url.pathname !== "/settings" || url.search) return failure(404, "not_found");
+      if (url.pathname !== "/settings") return failure(404, "not_found");
       if (!["GET", "PUT"].includes(request.method))
         return failure(405, "method_not_allowed", { allow: "GET, PUT" });
       if (request.signal.aborted) return failure(503, "request_cancelled");

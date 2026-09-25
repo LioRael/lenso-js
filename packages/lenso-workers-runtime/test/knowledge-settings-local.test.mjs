@@ -181,6 +181,44 @@ test("GET settings keeps bearer out of Guest calls and awaits one read from the 
   assert.equal(loader.created, 3);
 });
 
+test("GET and PUT ignore unbound query parameters like the Native settings routes", async () => {
+  const readLoader = guest();
+  const readCalls = [];
+  const read = createKnowledgeSettingsLocalWorkerAdapter(options(readLoader, {
+    fetchBridge: async (url) => {
+      readCalls.push(url);
+      return Response.json({ schema: "lenso.knowledge-settings-result.v1", kind: "ok",
+        settings: { excerpt_limit: 48, revision: 2 } });
+    },
+  }));
+  const readResponse = await read.handle(new Request("http://worker.test/settings?ignored=1", {
+    headers: { authorization: "Bearer opaque-user-token" },
+  }));
+  assert.equal(readResponse.status, 200);
+  assert.deepEqual(readCalls, ["http://127.0.0.1:36742/v1/knowledge-settings/read"]);
+
+  const writeLoader = guest({ prepareResult: {
+    schema: "lenso.knowledge-settings-command.v1", kind: "cas",
+    excerpt_limit: 48, predecessor_revision: 1,
+    payload_sha256: `sha256:${"b".repeat(64)}`,
+  } });
+  const writeCalls = [];
+  const write = createKnowledgeSettingsLocalWorkerAdapter(options(writeLoader, {
+    fetchBridge: async (url) => {
+      writeCalls.push(url);
+      return Response.json({ schema: "lenso.knowledge-settings-result.v1", kind: "ok",
+        settings: { excerpt_limit: 48, revision: 2 } });
+    },
+  }));
+  const writeResponse = await write.handle(new Request("http://worker.test/settings?ignored=1", {
+    method: "PUT",
+    headers: { authorization: "Bearer opaque-user-token", "content-type": "application/json" },
+    body: JSON.stringify({ excerpt_limit: 48, predecessor_revision: 1 }),
+  }));
+  assert.equal(writeResponse.status, 200);
+  assert.deepEqual(writeCalls, ["http://127.0.0.1:36742/v1/knowledge-settings/compare-and-set"]);
+});
+
 test("PUT settings forwards a validated Guest CAS command once with an optional idempotency key", async () => {
   const hash = `sha256:${"b".repeat(64)}`;
   const loader = guest({
