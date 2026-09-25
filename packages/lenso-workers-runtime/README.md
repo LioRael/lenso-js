@@ -38,6 +38,29 @@ Adapter primitive, not an App builder or deployment qualification. The Rust
 local Bundle-only App target is a separate candidate and must supply the
 trusted digest map for V2.
 
+The `./knowledge-settings-local` entry is a separate, exact-identity-gated
+adapter for the reference Knowledge Base's `GET/PUT /settings` slice in a
+local workerd qualification. It requires the private
+`lenso:knowledge-settings-local@1.0.0/plugin` world, selected
+`lenso.reference.knowledge-settings/default` Plan Instance, a locally verified
+Artifact digest matching the Plan, and the pinned HTTP Endpoint Descriptor.
+Its Guest has four exact exports (`describe`, `invoke`, `prepareSettings`,
+`completeSettings`) and no imports. The ordinary `./component-requests` entry
+still admits only the canonical two-export Guest.
+
+The local adapter's `handle(request)` accepts only `GET` and `PUT` at
+`/settings`. A caller must pass an explicit loopback `bridgeOrigin`, its own
+`fetchBridge` function, and a bounded `bridgeTimeoutMs` (default 1000 ms). The
+deadline covers the request body and bridge response as one wall-clock budget.
+The adapter sends the incoming Bearer credential only to the local Host bridge,
+not to the Guest; the Guest validates a bounded settings command and maps the
+Host-validated result to an HTTP Endpoint response. The bridge performs one
+bounded read or CAS request with no redirect, fallback, or automatic write
+retry. The Host sidecar still owns bearer-to-user policy, PostgreSQL
+transactions, and verification of the signed Bundle and copied Artifact
+bytes. This entry does not provide generic Component storage imports or
+production Workers database support.
+
 Use `lenso-workers-build --manifest Cargo.toml --package my-host --out-dir pkg`
 to build a consumer Host with its locked dependency graph. It requires Rust
 1.94.0, `wasm32-unknown-unknown`, and wasm-bindgen CLI 0.2.127. `CARGO` and

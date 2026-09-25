@@ -10,6 +10,7 @@ test("workspace package preserves its public Workers entrypoints and CLI", async
   const clock = await import("@lenso/workers-runtime/clock");
   const build = await import("@lenso/workers-runtime/build");
   const component = await import("@lenso/workers-runtime/component-requests");
+  const knowledgeSettings = await import("@lenso/workers-runtime/knowledge-settings-local");
 
   assert.equal(root.createWorkersHttpHost, host.createWorkersHttpHost);
   assert.equal(root.createHttpHandler, http.createHttpHandler);
@@ -18,6 +19,7 @@ test("workspace package preserves its public Workers entrypoints and CLI", async
   assert.equal(typeof clock.clearTimers, "function");
   assert.equal(typeof build.build, "function");
   assert.equal(typeof component.createWorkersComponentRequestAdapter, "function");
+  assert.equal(typeof knowledgeSettings.createKnowledgeSettingsLocalWorkerAdapter, "function");
 
   const manifest = JSON.parse(
     await readFile(new URL("../package.json", import.meta.url), "utf8"),

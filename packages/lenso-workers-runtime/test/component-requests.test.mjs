@@ -262,3 +262,19 @@ test("restart policy must be the exact serialized never policy", () => {
   }
   assert.equal(loader.created, 0);
 });
+
+test("generic request adapter keeps its exact two-export Guest boundary", () => {
+  const loader = guest({
+    abi: "lenso.json-request@1",
+    capabilities: [{
+      capability_id: CAPABILITY,
+      descriptor_version: "1.1.0",
+      request_operations: ["describe", "handle"],
+    }],
+  });
+  assert.throws(() => createWorkersComponentRequestAdapter({
+    plan: plan(), instanceKey: "endpoint", coreModule,
+    instantiate: (...args) => ({ ...loader.instantiate(...args), prepareSettings() {} }),
+    guestExports: ["describe", "invoke", "prepareSettings"],
+  }), /unexpected shape/);
+});

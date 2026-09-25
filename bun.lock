@@ -84,14 +84,14 @@
     },
     "packages/lenso-web-ingress-workers": {
       "name": "@lenso/web-ingress-workers",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "devDependencies": {
-        "@lenso/workers-runtime": "0.1.4",
+        "@lenso/workers-runtime": "0.1.5",
       },
     },
     "packages/lenso-workers-runtime": {
       "name": "@lenso/workers-runtime",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "bin": {
         "lenso-workers-build": "./build.mjs",
       },
