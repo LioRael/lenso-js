@@ -3,6 +3,7 @@ import test from "node:test";
 import { createWorkersComponentRequestAdapter } from "../component-requests.mjs";
 
 const CAPABILITY = "lenso.http.endpoint@1";
+const DESCRIPTOR_DIGEST = "sha256:701deedf705cb1a3b2f35fcae72f20ae85d46c6da6a008405a519018bbcdd3fe";
 const coreModule = new WebAssembly.Module(Uint8Array.from([0, 97, 115, 109, 1, 0, 0, 0]));
 
 function plan() {
@@ -79,6 +80,81 @@ test("selected request-only Component is checked before readiness and gets a fre
   assert.equal(adapter.invoke(CAPABILITY, "describe", "{}"), '"describe:{}"');
   assert.equal(loader.created, 3);
   assert.throws(() => adapter.invoke(CAPABILITY, "stream", "{}"), /not selected/);
+});
+
+test("authoring V2 requires a trusted exact Descriptor digest and matches the Guest", () => {
+  const selected = plan();
+  selected.plugin_instances[0].authoring_version = 2;
+  const loader = guest({
+    abi: "lenso.json-request@1",
+    capabilities: [{
+      capability_id: CAPABILITY,
+      descriptor_version: "1.1.0",
+      descriptor_digest: DESCRIPTOR_DIGEST,
+      request_operations: ["describe", "handle"],
+    }],
+  });
+  const adapter = createWorkersComponentRequestAdapter({
+    plan: selected, instanceKey: "endpoint", coreModule,
+    instantiate: loader.instantiate,
+    expectedDescriptorDigests: { [CAPABILITY]: DESCRIPTOR_DIGEST },
+  });
+  assert.equal(loader.created, 1);
+  assert.equal(adapter.invoke(CAPABILITY, "handle", "{}"), '"handle:{}"');
+});
+
+test("authoring V2 rejects missing, unexpected or malformed trusted digest before Guest creation", () => {
+  const selected = plan();
+  selected.plugin_instances[0].authoring_version = 2;
+  const loader = guest({});
+  for (const [name, expectedDescriptorDigests] of [
+    ["missing", undefined],
+    ["empty", {}],
+    ["extra", { [CAPABILITY]: DESCRIPTOR_DIGEST, "other.capability@1": DESCRIPTOR_DIGEST }],
+    ["malformed", { [CAPABILITY]: "sha256:wrong" }],
+    ["uppercase", { [CAPABILITY]: DESCRIPTOR_DIGEST.toUpperCase() }],
+  ]) {
+    assert.throws(() => createWorkersComponentRequestAdapter({
+      plan: selected, instanceKey: "endpoint", coreModule,
+      instantiate: loader.instantiate, expectedDescriptorDigests,
+    }), /Descriptor digest/, name);
+  }
+  assert.equal(loader.created, 0);
+});
+
+test("authoring V2 rejects a Guest digest not matching the trusted Host input", () => {
+  const selected = plan();
+  selected.plugin_instances[0].authoring_version = 2;
+  for (const capability of [
+    { capability_id: CAPABILITY, descriptor_version: "1.1.0", request_operations: ["describe", "handle"] },
+    { capability_id: CAPABILITY, descriptor_version: "1.1.0", descriptor_digest: `sha256:${"a".repeat(64)}`, request_operations: ["describe", "handle"] },
+    { capability_id: CAPABILITY, descriptor_version: "1.1.0", descriptor_digest: DESCRIPTOR_DIGEST, request_operations: ["describe", "handle"], unexpected: true },
+  ]) {
+    const loader = guest({ abi: "lenso.json-request@1", capabilities: [capability] });
+    assert.throws(() => createWorkersComponentRequestAdapter({
+      plan: selected, instanceKey: "endpoint", coreModule,
+      instantiate: loader.instantiate,
+      expectedDescriptorDigests: { [CAPABILITY]: DESCRIPTOR_DIGEST },
+    }), /unexpected shape|descriptor differs/);
+  }
+});
+
+test("authoring V1 keeps the no-digest descriptor shape", () => {
+  const legacy = guest({
+    abi: "lenso.json-request@1",
+    capabilities: [{
+      capability_id: CAPABILITY, descriptor_version: "1.1.0",
+      descriptor_digest: DESCRIPTOR_DIGEST,
+      request_operations: ["describe", "handle"],
+    }],
+  });
+  assert.throws(() => createWorkersComponentRequestAdapter({
+    plan: plan(), instanceKey: "endpoint", coreModule, instantiate: legacy.instantiate,
+  }), /unexpected shape/);
+  assert.throws(() => createWorkersComponentRequestAdapter({
+    plan: plan(), instanceKey: "endpoint", coreModule, instantiate: legacy.instantiate,
+    expectedDescriptorDigests: { [CAPABILITY]: DESCRIPTOR_DIGEST },
+  }), /authoring V1/);
 });
 
 test("unsupported Plan closure and interaction kinds fail before Guest instantiation", () => {

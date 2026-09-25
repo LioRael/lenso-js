@@ -21,13 +21,22 @@ requirements, custom admission and Kernel supervision instead of falling back
 to Native. The [local workerd fixture](../../fixtures/workers-component-guest/README.md)
 uses this entry.
 
+For authoring V2, the Host must pass `expectedDescriptorDigests`, an exact map
+from each Plan-provided Capability ID to a trusted `sha256:` Descriptor digest.
+The Guest's `describe` result must contain the same `descriptor_digest` for
+every Capability. Missing, extra, malformed, or mismatched digests fail before
+request admission. Authoring V1 retains its legacy no-digest Guest shape and
+rejects a digest map; neither mode derives trust from the Guest's self-report.
+
 This entry does not validate a signed package or Component WIT metadata,
 generate a Plan, run the Kernel,
 provide HTTP routing or Auth policy, enforce Guest memory/turn limits, or build
 a Workers distribution. Its caller must supply the exact verified artifact and
 resolved Plan from its own Host authority. The public `app build/prepare`
-Workers targets remain closed; this entry is a bounded Adapter primitive, not
-an App-selectable Workers target or deployment qualification.
+Workers targets remain independently gated; this entry alone is a bounded
+Adapter primitive, not an App builder or deployment qualification. The Rust
+local Bundle-only App target is a separate candidate and must supply the
+trusted digest map for V2.
 
 Use `lenso-workers-build --manifest Cargo.toml --package my-host --out-dir pkg`
 to build a consumer Host with its locked dependency graph. It requires Rust

@@ -92,7 +92,7 @@ function selectedInstance(plan, instanceKey) {
   return instance;
 }
 
-function expectedDescriptor(instance) {
+function expectedDescriptor(instance, expectedDescriptorDigests) {
   const capabilities = instance.provided_capabilities.map((endpoint) => {
     record(endpoint, "Capability endpoint");
     exactKeys(endpoint, ["capability_id", "descriptor_version", "operations",
@@ -123,6 +123,19 @@ function expectedDescriptor(instance) {
   if (capabilities.some((entry, index) => index > 0 &&
       entry.capability_id === capabilities[index - 1].capability_id))
     throw new TypeError("selected Component has duplicate Capability endpoints");
+  if (instance.authoring_version === 2) {
+    const digests = record(expectedDescriptorDigests, "trusted Descriptor digests");
+    exactKeys(digests, capabilities.map((capability) => capability.capability_id),
+      "trusted Descriptor digests");
+    for (const capability of capabilities) {
+      const digest = digests[capability.capability_id];
+      if (typeof digest !== "string" || !/^sha256:[0-9a-f]{64}$/.test(digest))
+        throw new TypeError("trusted Descriptor digest must be an exact SHA-256 identity");
+      capability.descriptor_digest = digest;
+    }
+  } else if (expectedDescriptorDigests !== undefined) {
+    throw new TypeError("authoring V1 Guest does not admit Descriptor digests");
+  }
   return { abi: "lenso.json-request@1", capabilities };
 }
 
@@ -145,9 +158,10 @@ function checkedGuest(instantiate, coreModule, coreModulePath) {
  */
 export function createWorkersComponentRequestAdapter({
   plan, instanceKey, coreModule, instantiate, coreModulePath = "guest.core.wasm",
+  expectedDescriptorDigests,
 } = {}) {
   const instance = selectedInstance(plan, instanceKey);
-  const expected = expectedDescriptor(instance);
+  const expected = expectedDescriptor(instance, expectedDescriptorDigests);
   if (!(coreModule instanceof WebAssembly.Module) ||
       WebAssembly.Module.imports(coreModule).length !== 0)
     throw new TypeError("Workers Component core module must be precompiled and import-free");
@@ -162,8 +176,9 @@ export function createWorkersComponentRequestAdapter({
     throw new TypeError("Guest capabilities must be an array");
   const capabilities = actual.capabilities.map((capability) => {
     record(capability, "Guest Capability");
-    exactKeys(capability, ["capability_id", "descriptor_version", "request_operations"],
-      "Guest Capability");
+    exactKeys(capability, instance.authoring_version === 2
+      ? ["capability_id", "descriptor_version", "descriptor_digest", "request_operations"]
+      : ["capability_id", "descriptor_version", "request_operations"], "Guest Capability");
     return capability;
   }).sort((left, right) => compareId(String(left.capability_id), String(right.capability_id)));
   const normalized = {
@@ -172,6 +187,8 @@ export function createWorkersComponentRequestAdapter({
       capability_id: capability.capability_id,
       descriptor_version: capability.descriptor_version,
       request_operations: capability.request_operations,
+      ...(instance.authoring_version === 2
+        ? { descriptor_digest: capability.descriptor_digest } : {}),
     })),
   };
   if (JSON.stringify(normalized) !== JSON.stringify(expected))
