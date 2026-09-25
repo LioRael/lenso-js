@@ -173,7 +173,7 @@ test("GET settings keeps bearer out of Guest calls and awaits one read from the 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "http://127.0.0.1:36742/v1/knowledge-settings/read");
   assert.equal(calls[0].init.method, "POST");
-  assert.equal(calls[0].init.redirect, "error");
+  assert.equal(calls[0].init.redirect, "manual");
   assert.equal(calls[0].init.headers.authorization, "Bearer opaque-user-token");
   assert.match(JSON.parse(calls[0].init.body).request_id,
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -217,6 +217,30 @@ test("GET and PUT ignore unbound query parameters like the Native settings route
   }));
   assert.equal(writeResponse.status, 200);
   assert.deepEqual(writeCalls, ["http://127.0.0.1:36742/v1/knowledge-settings/compare-and-set"]);
+});
+
+test("workerd-compatible manual redirect mode rejects a bridge redirect without following it", async () => {
+  const loader = guest({
+    completeResponse: {
+      status: 503,
+      headers: [{ name: "content-type", value: "application/problem+json" }],
+      body: btoa('{"code":"knowledge_storage_unavailable"}'),
+    },
+  });
+  let calls = 0;
+  const adapter = createKnowledgeSettingsLocalWorkerAdapter(options(loader, {
+    fetchBridge: async (_url, init) => {
+      calls++;
+      assert.equal(init.redirect, "manual");
+      return Response.redirect("https://example.invalid/elsewhere", 302);
+    },
+  }));
+  const response = await adapter.handle(new Request("http://worker.test/settings", {
+    headers: { authorization: "Bearer opaque-user-token" },
+  }));
+  assert.equal(response.status, 503);
+  assert.equal(calls, 1);
+  assert.equal(loader.completed[0].result.kind, "storage_unavailable");
 });
 
 test("PUT settings forwards a validated Guest CAS command once with an optional idempotency key", async () => {

@@ -251,7 +251,7 @@ async function readStore({ origin, fetchBridge, authorization, signal, timeoutMs
       method: "POST",
       headers: { authorization, "content-type": "application/json" },
       body: JSON.stringify(payload),
-      redirect: "error",
+      redirect: "manual",
       signal: controller.signal,
     }), interrupted]);
     if (response.status !== 200 || !isJsonMediaType(response.headers.get("content-type")))
