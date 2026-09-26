@@ -164,5 +164,12 @@ jobs:
           archives=(release-artifacts/*.tgz)
           test "${#archives[@]}" -eq 1
           test "$(sha256sum "${archives[0]}" | cut -d ' ' -f1)" = "$EXPECTED_SHA256"
+      - name: Check exact public npm version is unoccupied
+        env:
+          PACKAGE_PATH: packages/${{ inputs.package }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          package_name="$(node -p "require('./$PACKAGE_PATH/package.json').name")"
+          node .github/scripts/check-npm-release-version.mjs "$package_name" "$RELEASE_VERSION"
       - name: Publish verified artifact
-        run: npm publish ./release-artifacts/*.tgz --ignore-scripts --access public --provenance
+        run: npm publish ./release-artifacts/*.tgz --ignore-scripts --access public --provenance --registry=https://registry.npmjs.org/
