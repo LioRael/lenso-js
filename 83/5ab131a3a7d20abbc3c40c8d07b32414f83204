@@ -1,0 +1,26 @@
+.github/scripts/check-npm-release-version.test.mjs
+  s_7d146975368699::t_5a62ed35140a31 1-12,14-51
+  s_7d146975368699::t_a438308d7c4d9c 13
+.github/scripts/check-npm-release-version.mjs
+  s_7d146975368699::t_5a62ed35140a31 1-9,11-13,16-42
+  s_7d146975368699::t_a438308d7c4d9c 10,14-15
+.github/workflows/release-npm.yml
+  s_7d146975368699::t_5a62ed35140a31 89
+  s_7d146975368699::t_7ea08c63b58b5c 85-88,92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "835ab131a3a7d20abbc3c40c8d07b32414f83204",
+  "prompts": {},
+  "sessions": {
+    "s_7d146975368699": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c54a-381f-7362-9b4d-95aea89e2437",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "LioRael <leo@lenso.dev>"
+    }
+  }
+}
