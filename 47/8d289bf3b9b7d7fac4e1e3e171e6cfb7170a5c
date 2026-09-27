@@ -1,0 +1,23 @@
+.github/workflows/release-npm.yml
+  s_7d146975368699::t_45bc2c8d1b1b5a 141-148
+.github/workflows/release-cli-npm.yml
+  s_7d146975368699::t_45bc2c8d1b1b5a 275-282
+docs/workers-npm-release.md
+  s_7d146975368699::t_45bc2c8d1b1b5a 31-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "478d289bf3b9b7d7fac4e1e3e171e6cfb7170a5c",
+  "prompts": {},
+  "sessions": {
+    "s_7d146975368699": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c54a-381f-7362-9b4d-95aea89e2437",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "LioRael <leo@lenso.dev>"
+    }
+  }
+}
