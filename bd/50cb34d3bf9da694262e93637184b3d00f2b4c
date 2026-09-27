@@ -1,0 +1,23 @@
+packages/lenso-cli/scripts/check-npm-publish.mjs
+  s_7d146975368699::t_6a44f5d8b6f96e 2,8-11,14-29,31-55,57
+packages/lenso-cli/package.json
+  s_7d146975368699::t_6a44f5d8b6f96e 29
+README.md
+  s_7d146975368699::t_6a44f5d8b6f96e 83-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bd50cb34d3bf9da694262e93637184b3d00f2b4c",
+  "prompts": {},
+  "sessions": {
+    "s_7d146975368699": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c54a-381f-7362-9b4d-95aea89e2437",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "LioRael <leo@lenso.dev>"
+    }
+  }
+}
