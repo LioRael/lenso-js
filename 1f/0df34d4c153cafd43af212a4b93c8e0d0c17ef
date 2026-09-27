@@ -1,0 +1,28 @@
+.github/workflows/release-cli-npm.yml
+  s_7d146975368699::t_92cf475ec36661 206,240,306,317
+  s_7d146975368699::t_808160b7cb131b 81
+  s_7d146975368699::t_a9f8cf2f4c3f6c 185-196
+README.md
+  s_7d146975368699::t_92cf475ec36661 86-88
+.github/scripts/cli-release-artifacts.test.mjs
+  s_7d146975368699::t_8e64211ff6cdd8 3,80-82,86,90-94
+  s_7d146975368699::t_a627409fd16f57 56,60,79
+.github/scripts/cli-release-artifacts.mjs
+  s_7d146975368699::t_eb69340f56afb6 81-101,272-273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1f0df34d4c153cafd43af212a4b93c8e0d0c17ef",
+  "prompts": {},
+  "sessions": {
+    "s_7d146975368699": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c54a-381f-7362-9b4d-95aea89e2437",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "LioRael <leo@lenso.dev>"
+    }
+  }
+}
