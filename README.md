@@ -75,15 +75,18 @@ npm pack --dry-run ./packages/lenso-cli
 npm pack --dry-run ./packages/lenso-workers-runtime
 ```
 
-The dispatch-only npm release workflow covers packages whose verified output
-is built entirely in this workspace. `@lenso/cli` is not yet a release choice:
-its published archive needs four platform-specific native executables from the
-Rust workspace, and this workflow does not build or assemble them. A separate
-cross-repository packaging gate is required before moving that publication
-path here. The local CLI `npm pack --dry-run` requires the four native
-executables and checks their formats and architectures. It does not verify
-their source revision or behavior on each target; those checks belong in the
-cross-repository packaging gate.
+The dispatch-only npm release workflow covers packages built entirely in this
+workspace; `@lenso/cli` stays outside that workflow. Its separate
+[`release-cli-npm.yml`](.github/workflows/release-cli-npm.yml) dry run pins exact
+JS and Rust commits, builds and runs the CLI on macOS ARM64/x64, Linux x64,
+and Windows x64, then puts their source and artifact receipts inside one npm
+archive. Four clean consumers install that archive and create an App. The
+workflow is a candidate gate until a successful remote run proves all four
+targets. A later, separately authorized publish run must reuse that successful
+run's immutable archive, match its reviewed SHA-256, find both commits on main,
+and pass the unoccupied-version check. Configure npm Trusted Publishing for
+this workflow before authorizing publish; neither a local pack nor a dry run
+publishes the candidate.
 See [Workers npm release guidance](docs/workers-npm-release.md) for the
 reviewed-archive hash and Trusted Publisher requirements.
 

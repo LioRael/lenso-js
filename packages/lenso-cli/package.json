@@ -1,6 +1,6 @@
 {
   "name": "@lenso/cli",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "description": "JavaScript launcher and TypeScript Host authoring API for the Lenso CLI.",
   "license": "MIT",
   "homepage": "https://github.com/LioRael/lenso-js/tree/main/packages/lenso-cli",
@@ -25,7 +25,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "smoke": "node scripts/check-npm-shim.mjs && node --test scripts/host-extract.test.mjs scripts/host-owner.test.mjs scripts/distribution-host.test.mjs",
+    "smoke": "node scripts/check-npm-shim.mjs && node --test scripts/host-extract.test.mjs scripts/host-owner.test.mjs scripts/distribution-host.test.mjs ../../.github/scripts/cli-release-artifacts.test.mjs",
     "prepack": "node scripts/check-npm-publish.mjs",
     "prepublishOnly": "node scripts/check-npm-publish.mjs"
   },

@@ -1,17 +1,19 @@
 import assert from 'node:assert/strict';
-import { closeSync, lstatSync, openSync, readSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { closeSync, lstatSync, openSync, readFileSync, readSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const required = [
-  ['darwin-arm64', 'lenso', 0x0100000c],
-  ['darwin-x64', 'lenso', 0x01000007],
-  ['linux-x64', 'lenso', 0x3e],
-  ['win32-x64', 'lenso.exe', 0x8664]
+  ['darwin-arm64', 'lenso', 0x0100000c, 'aarch64-apple-darwin', 'macOS', 'ARM64'],
+  ['darwin-x64', 'lenso', 0x01000007, 'x86_64-apple-darwin', 'macOS', 'X64'],
+  ['linux-x64', 'lenso', 0x3e, 'x86_64-unknown-linux-gnu', 'Linux', 'X64'],
+  ['win32-x64', 'lenso.exe', 0x8664, 'x86_64-pc-windows-msvc', 'Windows', 'X64']
 ];
+let sourceIdentity;
 
-for (const [tag, exe, machine] of required) {
+for (const [tag, exe, machine, target, runnerOs, runnerArch] of required) {
   const relativePath = `vendor/${tag}/${exe}`;
   const binary = path.join(root, 'vendor', tag, exe);
   let info;
@@ -52,6 +54,28 @@ for (const [tag, exe, machine] of required) {
   } finally {
     closeSync(fd);
   }
+
+  const receiptPath = path.join(root, 'vendor', tag, 'receipt.json');
+  const receiptInfo = lstatSync(receiptPath);
+  assert.ok(receiptInfo.isFile() && !receiptInfo.isSymbolicLink(), `${tag} receipt must be a regular file`);
+  const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+  assert.equal(receipt.schema, 'lenso.cli.native.v1');
+  assert.equal(receipt.tag, tag);
+  assert.equal(receipt.target, target);
+  assert.equal(receipt.runner_os, runnerOs);
+  assert.equal(receipt.runner_arch, runnerArch);
+  assert.match(receipt.binary_sha256, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(receipt.binary_size, info.size);
+  assert.equal(receipt.binary_sha256, `sha256:${createHash('sha256').update(readFileSync(binary)).digest('hex')}`);
+  assert.ok(Number.isSafeInteger(receipt.github_artifact_id) && receipt.github_artifact_id > 0);
+  assert.match(receipt.github_artifact_digest, /^sha256:[0-9a-f]{64}$/);
+  const identity = [receipt.js_source_sha, receipt.rust_source_sha, receipt.run_id, receipt.run_attempt];
+  assert.match(identity[0], /^[0-9a-f]{40}$/);
+  assert.match(identity[1], /^[0-9a-f]{40}$/);
+  assert.match(identity[2], /^[1-9][0-9]*$/);
+  assert.match(identity[3], /^[1-9][0-9]*$/);
+  if (sourceIdentity) assert.deepEqual(identity, sourceIdentity, `${tag} belongs to another source or run`);
+  sourceIdentity = identity;
 }
 
 console.log('npm native binary shape check passed');

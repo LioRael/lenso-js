@@ -1,0 +1,312 @@
+name: Release npm CLI
+
+on:
+  workflow_dispatch:
+    inputs:
+      js_source_sha:
+        description: Exact lenso-js source commit
+        required: true
+        type: string
+      rust_source_sha:
+        description: Exact lenso Rust source commit for native binaries
+        required: true
+        type: string
+      version:
+        description: Exact new @lenso/cli version
+        required: true
+        type: string
+      mode:
+        description: Dry-run builds one reviewable archive; publish reuses that archive
+        required: true
+        default: dry-run
+        type: choice
+        options: [dry-run, publish]
+      candidate_run_id:
+        description: Successful dry-run workflow run ID, required for publish
+        required: false
+        default: ''
+        type: string
+      reviewed_archive_sha256:
+        description: "Reviewed sha256: digest of the dry-run npm archive"
+        required: false
+        default: ''
+        type: string
+      publish_confirmation:
+        description: Enter publish only after publication is authorized
+        required: false
+        default: ''
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: npm-cli-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      JS_SHA: ${{ inputs.js_source_sha }}
+      RUST_SHA: ${{ inputs.rust_source_sha }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_MODE: ${{ inputs.mode }}
+      CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+      REVIEWED_SHA256: ${{ inputs.reviewed_archive_sha256 }}
+      PUBLISH_CONFIRMATION: ${{ inputs.publish_confirmation }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.js_source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: LioRael/lenso
+          ref: ${{ inputs.rust_source_sha }}
+          path: rust
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+      - name: Verify exact source, version, and mode
+        shell: bash
+        run: |
+          [[ "$JS_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$RUST_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(git rev-parse HEAD)" = "$JS_SHA"
+          test "$(git -C rust rev-parse HEAD)" = "$RUST_SHA"
+          test "$(node -p "require('./packages/lenso-cli/package.json').name")" = '@lenso/cli'
+          test "$(node -p "require('./packages/lenso-cli/package.json').version")" = "$RELEASE_VERSION"
+          if [[ "$RELEASE_MODE" == dry-run ]]; then
+            test "$GITHUB_SHA" = "$JS_SHA"
+            test -z "$CANDIDATE_RUN_ID"
+            test -z "$REVIEWED_SHA256"
+            test -z "$PUBLISH_CONFIRMATION"
+          else
+            test "$RELEASE_MODE" = publish
+            test "$GITHUB_REF" = refs/heads/main
+            test "$PUBLISH_CONFIRMATION" = publish
+            [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+            [[ "$REVIEWED_SHA256" =~ ^sha256:[0-9a-f]{64}$ ]]
+            git fetch origin main --no-tags
+            git merge-base --is-ancestor "$JS_SHA" origin/main
+            git -C rust fetch origin main --no-tags
+            git -C rust merge-base --is-ancestor "$RUST_SHA" origin/main
+          fi
+
+  native:
+    needs: validate
+    if: ${{ inputs.mode == 'dry-run' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { tag: darwin-arm64, runner: macos-15, target: aarch64-apple-darwin, binary: lenso }
+          - { tag: darwin-x64, runner: macos-15-intel, target: x86_64-apple-darwin, binary: lenso }
+          - { tag: linux-x64, runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu, binary: lenso }
+          - { tag: win32-x64, runner: windows-2025, target: x86_64-pc-windows-msvc, binary: lenso.exe }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      JS_SHA: ${{ inputs.js_source_sha }}
+      RUST_SHA: ${{ inputs.rust_source_sha }}
+      TARGET: ${{ matrix.target }}
+      TAG: ${{ matrix.tag }}
+      BINARY: ${{ matrix.binary }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.js_source_sha }}
+          path: lenso-js
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: LioRael/lenso
+          ref: ${{ inputs.rust_source_sha }}
+          path: rust
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88 # 1.94.0
+        with:
+          toolchain: 1.94.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+      - name: Build and run the native CLI on its target
+        shell: bash
+        run: |
+          test "$(git -C lenso-js rev-parse HEAD)" = "$JS_SHA"
+          test "$(git -C rust rev-parse HEAD)" = "$RUST_SHA"
+          rustc -vV | grep -Fx "host: $TARGET"
+          cargo build --locked --release --manifest-path rust/Cargo.toml -p lenso-cli --bin lenso
+          "rust/target/release/$BINARY" --help
+          node lenso-js/.github/scripts/cli-release-artifacts.mjs receipt \
+            "$TAG" "$JS_SHA" "$RUST_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "rust/target/release/$BINARY" native
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cli-native-${{ matrix.tag }}
+          path: native/
+          if-no-files-found: error
+
+  assemble:
+    needs: native
+    if: ${{ inputs.mode == 'dry-run' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    env:
+      JS_SHA: ${{ inputs.js_source_sha }}
+      RUST_SHA: ${{ inputs.rust_source_sha }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.js_source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: cli-native-*
+          merge-multiple: true
+          path: native-artifacts
+      - name: Verify four native receipts and pack the npm candidate
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$JS_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" > "$RUNNER_TEMP/cli-artifacts.json"
+          node .github/scripts/cli-release-artifacts.mjs assemble \
+            native-artifacts packages/lenso-cli "$JS_SHA" "$RUST_SHA" \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" < "$RUNNER_TEMP/cli-artifacts.json"
+          bun install --frozen-lockfile --ignore-scripts
+          bun run --filter '@lenso/cli' build
+          git diff --exit-code -- packages/lenso-cli/bin
+          mkdir release-artifacts
+          npm pack ./packages/lenso-cli --pack-destination release-artifacts
+          shopt -s nullglob
+          archives=(release-artifacts/*.tgz)
+          test "${#archives[@]}" -eq 1
+          node .github/scripts/cli-release-artifacts.mjs manifest \
+            "${archives[0]}" release-artifacts/manifest.json "$JS_SHA" "$RUST_SHA" \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$RELEASE_VERSION" < "$RUNNER_TEMP/cli-artifacts.json"
+          npm publish "${archives[0]}" --dry-run --ignore-scripts --access public --provenance=false
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cli-npm-candidate
+          path: release-artifacts/
+          if-no-files-found: error
+
+  consume:
+    needs: assemble
+    if: ${{ inputs.mode == 'dry-run' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel, ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      actions: read
+    steps:
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: cli-npm-candidate
+          path: release-artifacts
+      - name: Install only the reviewed npm archive and exercise its launcher
+        shell: bash
+        run: |
+          shopt -s nullglob
+          archives=(release-artifacts/*.tgz)
+          test "${#archives[@]}" -eq 1
+          npm install --prefix "$RUNNER_TEMP/cli-consumer" --ignore-scripts --no-audit --no-fund "${archives[0]}"
+          node --input-type=commonjs -e '
+            const { spawnSync } = require("node:child_process");
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const root = path.join(process.env.RUNNER_TEMP, "cli-consumer");
+            const entry = path.join(root, "node_modules", "@lenso", "cli", "bin", "lenso.js");
+            const app = path.join(root, "proof-app");
+            for (const args of [["--help"], ["app", "create", app, "--runtime", "empty", "--no-install"]]) {
+              const result = spawnSync(process.execPath, [entry, ...args], { cwd: root, stdio: "inherit" });
+              if (result.error || result.status !== 0) throw result.error ?? new Error(`lenso ${args.join(" ")} failed`);
+            }
+            for (const relative of ["app", "plugins", "README.md"]) {
+              if (!fs.existsSync(path.join(app, relative))) throw new Error(`the installed CLI did not create ${relative}`);
+            }
+          '
+
+  publish:
+    needs: validate
+    if: ${{ inputs.mode == 'publish' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    env:
+      JS_SHA: ${{ inputs.js_source_sha }}
+      RUST_SHA: ${{ inputs.rust_source_sha }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+      REVIEWED_SHA256: ${{ inputs.reviewed_archive_sha256 }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.js_source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+      - name: Verify successful candidate run and select its immutable artifact
+        id: candidate
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$JS_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID" |
+            node .github/scripts/cli-release-artifacts.mjs inspect-run "$CANDIDATE_RUN_ID" "$JS_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID/artifacts?per_page=100" > "$RUNNER_TEMP/cli-artifacts.json"
+          node .github/scripts/cli-release-artifacts.mjs locate-candidate "$CANDIDATE_RUN_ID" "$JS_SHA" < "$RUNNER_TEMP/cli-artifacts.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ steps.candidate.outputs.candidate_artifact_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+          path: release-artifacts
+      - name: Verify reviewed archive, packaged receipts, and unoccupied version
+        env:
+          CANDIDATE_ATTEMPT: ${{ steps.candidate.outputs.candidate_attempt }}
+          CANDIDATE_ARTIFACT_ID: ${{ steps.candidate.outputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_DIGEST: ${{ steps.candidate.outputs.candidate_artifact_digest }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          archives=(release-artifacts/*.tgz)
+          test "${#archives[@]}" -eq 1
+          node .github/scripts/cli-release-artifacts.mjs verify-candidate \
+            "${archives[0]}" release-artifacts/manifest.json "$JS_SHA" "$RUST_SHA" \
+            "$CANDIDATE_RUN_ID" "$CANDIDATE_ATTEMPT" "$RELEASE_VERSION" "$REVIEWED_SHA256" \
+            "$CANDIDATE_ARTIFACT_ID" "$CANDIDATE_ARTIFACT_DIGEST" < "$RUNNER_TEMP/cli-artifacts.json"
+          node .github/scripts/check-npm-release-version.mjs '@lenso/cli' "$RELEASE_VERSION"
+      - name: Publish the exact reviewed archive
+        shell: bash
+        run: |
+          shopt -s nullglob
+          archives=(release-artifacts/*.tgz)
+          test "${#archives[@]}" -eq 1
+          npm publish "${archives[0]}" --ignore-scripts --access public --provenance --registry=https://registry.npmjs.org/

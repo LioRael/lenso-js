@@ -2,7 +2,8 @@
 import { EventEmitter } from "node:events";
 export type Platform = "darwin" | "linux" | "win32";
 export type Architecture = "arm64" | "x64";
-export declare function platformTag(platform?: string, arch?: string): `${Platform}-${Architecture}` | null;
+export type SupportedPlatformTag = "darwin-arm64" | "darwin-x64" | "linux-x64" | "win32-x64";
+export declare function platformTag(platform?: string, arch?: string): SupportedPlatformTag | null;
 export declare function binaryPath(baseDir?: string, platform?: string, arch?: string): string | null;
 export declare function ensureExecutableBinary(executable: string, platform?: string): void;
 interface SignalParent {

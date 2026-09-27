@@ -6,20 +6,27 @@ import { EventEmitter } from "node:events";
 import { chmodSync, statSync } from "node:fs";
 import path from "node:path";
 
-const SUPPORTED_PLATFORMS = new Set(["darwin", "linux", "win32"]);
-const SUPPORTED_ARCHES = new Set(["arm64", "x64"]);
+const SUPPORTED_TAGS = new Set([
+  "darwin-arm64",
+  "darwin-x64",
+  "linux-x64",
+  "win32-x64",
+]);
 
 export type Platform = "darwin" | "linux" | "win32";
 export type Architecture = "arm64" | "x64";
+export type SupportedPlatformTag =
+  | "darwin-arm64"
+  | "darwin-x64"
+  | "linux-x64"
+  | "win32-x64";
 
 export function platformTag(
   platform: string = process.platform,
   arch: string = process.arch,
-): `${Platform}-${Architecture}` | null {
-  if (!SUPPORTED_PLATFORMS.has(platform) || !SUPPORTED_ARCHES.has(arch)) {
-    return null;
-  }
-  return `${platform as Platform}-${arch as Architecture}`;
+): SupportedPlatformTag | null {
+  const tag = `${platform}-${arch}`;
+  return SUPPORTED_TAGS.has(tag) ? (tag as SupportedPlatformTag) : null;
 }
 
 export function binaryPath(
@@ -132,4 +139,3 @@ function run(): void {
 if (require.main === module) {
   run();
 }
-

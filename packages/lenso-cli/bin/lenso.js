@@ -11,13 +11,15 @@ exports.forwardTerminationSignals = forwardTerminationSignals;
 const node_child_process_1 = require("node:child_process");
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
-const SUPPORTED_PLATFORMS = new Set(["darwin", "linux", "win32"]);
-const SUPPORTED_ARCHES = new Set(["arm64", "x64"]);
+const SUPPORTED_TAGS = new Set([
+    "darwin-arm64",
+    "darwin-x64",
+    "linux-x64",
+    "win32-x64",
+]);
 function platformTag(platform = process.platform, arch = process.arch) {
-    if (!SUPPORTED_PLATFORMS.has(platform) || !SUPPORTED_ARCHES.has(arch)) {
-        return null;
-    }
-    return `${platform}-${arch}`;
+    const tag = `${platform}-${arch}`;
+    return SUPPORTED_TAGS.has(tag) ? tag : null;
 }
 function binaryPath(baseDir = node_path_1.default.join(__dirname, ".."), platform = process.platform, arch = process.arch) {
     const tag = platformTag(platform, arch);

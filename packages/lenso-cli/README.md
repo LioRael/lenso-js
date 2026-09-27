@@ -12,4 +12,6 @@ npm install -g @lenso/cli
 
 The published package includes a platform-specific native `lenso` executable.
 Source builds of that executable are produced and validated in the Rust
-workspace before release packaging.
+workspace before release packaging. Each new version must pass the four-target
+[CLI release gate](https://github.com/LioRael/lenso-js/blob/main/.github/workflows/release-cli-npm.yml)
+before it is independently consumable from npm.
