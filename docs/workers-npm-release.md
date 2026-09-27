@@ -28,6 +28,14 @@ For a package name not yet allocated on npm, an owner-authorized interactive
 bootstrap is needed before Trusted Publishing; do not add a long-lived token to
 this repository.
 
+Before enabling either npm publish workflow, inventory and disable every legacy
+workflow that can publish an overlapping package, then read back each workflow's
+inactive state. Migrate each package's Trusted Publisher to `LioRael/lenso-js`
+and its actual owner workflow (`release-npm.yml` or `release-cli-npm.yml`), and
+verify that ownership. Only then may an administrator set the repository
+variable `LENSO_RELEASE_OWNER_CUTOVER=complete`. Its absence blocks publication;
+successful dry runs do not authorize the cutover.
+
 Versions are explicit in each package manifest. Never overwrite or reuse a
 published version. For the first consolidated-repository cohort, publish
 `@lenso/contract-runtime@0.3.1` and `@lenso/process-protocol@0.2.4` before
