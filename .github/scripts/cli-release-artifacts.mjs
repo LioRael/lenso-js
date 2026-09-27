@@ -78,6 +78,27 @@ function artifactList(value) {
   return value.artifacts;
 }
 
+function selectNativeArtifact(tag, id, jsSha, api) {
+  assert.ok(targets.has(tag), `unsupported target ${tag}`);
+  const artifact = metadataFor(artifactList(api), `cli-native-${tag}`, id, jsSha);
+  process.stdout.write(`${artifact.github_artifact_id}\t${artifact.github_artifact_digest}\n`);
+}
+
+function verifyNativeArchive(archive, tag, expectedDigest) {
+  const target = targets.get(tag);
+  assert.ok(target, `unsupported target ${tag}`);
+  assert.match(expectedDigest, digest);
+  regularFile(archive);
+  assert.equal(sha256(archive), expectedDigest, `${tag} artifact ZIP digest differs`);
+  const entries = execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8' })
+    .trimEnd().split('\n');
+  const allowed = new Set([`${tag}/`, `${tag}/${target.binary}`, `${tag}/receipt.json`]);
+  assert.ok(entries.every((entry) => allowed.has(entry)), `${tag} artifact ZIP has an unexpected path`);
+  assert.equal(entries.filter((entry) => entry === `${tag}/${target.binary}`).length, 1);
+  assert.equal(entries.filter((entry) => entry === `${tag}/receipt.json`).length, 1);
+  assert.equal(new Set(entries).size, entries.length, `${tag} artifact ZIP has duplicate paths`);
+}
+
 function exactEntries(directory, names) {
   const stat = lstatSync(directory);
   assert.ok(stat.isDirectory() && !stat.isSymbolicLink(), `${directory} must be a regular directory`);
@@ -248,6 +269,8 @@ async function main() {
   if (command === 'receipt') return writeReceipt(...args);
   if (command === 'inspect-run') return inspectRun(JSON.parse(await readStdin()), ...args);
   if (command === 'locate-candidate') return locateCandidateArtifact(JSON.parse(await readStdin()), ...args);
+  if (command === 'select-native') return selectNativeArtifact(...args, JSON.parse(await readStdin()));
+  if (command === 'verify-native-archive') return verifyNativeArchive(...args);
   if (command === 'assemble') return assemble(...args, JSON.parse(await readStdin()));
   if (command === 'manifest') return writeManifest(...args, JSON.parse(await readStdin()));
   if (command === 'verify-candidate') return verifyCandidate(...args, JSON.parse(await readStdin()));

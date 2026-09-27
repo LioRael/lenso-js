@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,9 +53,11 @@ test('CLI candidate binds packed binary bytes to four source and artifact receip
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = path.join(root, 'source');
   const native = path.join(root, 'native');
+  const nativeArchives = path.join(root, 'native-zips');
   const candidatePackage = path.join(root, 'package');
   const release = path.join(root, 'release');
   mkdirSync(source);
+  mkdirSync(nativeArchives);
   mkdirSync(candidatePackage);
   mkdirSync(release);
   copyFileSync(path.join(packageRoot, 'package.json'), path.join(candidatePackage, 'package.json'));
@@ -73,13 +76,22 @@ test('CLI candidate binds packed binary bytes to four source and artifact receip
       RUNNER_ARCH: runnerArch,
     });
     assert.equal(result.status, 0, result.stderr);
+    const archive = path.join(nativeArchives, `${tag}.zip`);
+    const zipped = spawnSync('zip', ['-q', '-r', archive, tag], { cwd: native, encoding: 'utf8' });
+    assert.equal(zipped.status, 0, zipped.stderr);
+    const archiveDigest = `sha256:${createHash('sha256').update(readFileSync(archive)).digest('hex')}`;
     artifacts.push({
       id: index + 100,
       name: `cli-native-${tag}`,
-      digest: `sha256:${String(index + 1).repeat(64)}`,
+      digest: archiveDigest,
       expired: false,
       workflow_run: { id: Number(id), head_sha: jsSha },
     });
+    const selected = invoke(['select-native', tag, id, jsSha], { artifacts: [artifacts.at(-1)] });
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout.trim(), `${index + 100}\t${archiveDigest}`);
+    assert.equal(invoke(['verify-native-archive', archive, tag, archiveDigest]).status, 0);
+    assert.notEqual(invoke(['verify-native-archive', archive, tag, `sha256:${'0'.repeat(64)}`]).status, 0);
   }
   artifacts.push({
     id: 999,

@@ -78,12 +78,12 @@ jobs:
           [[ "$JS_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$RUST_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$GITHUB_SHA" = "$JS_SHA"
           test "$(git rev-parse HEAD)" = "$JS_SHA"
           test "$(git -C rust rev-parse HEAD)" = "$RUST_SHA"
           test "$(node -p "require('./packages/lenso-cli/package.json').name")" = '@lenso/cli'
           test "$(node -p "require('./packages/lenso-cli/package.json').version")" = "$RELEASE_VERSION"
           if [[ "$RELEASE_MODE" == dry-run ]]; then
-            test "$GITHUB_SHA" = "$JS_SHA"
             test -z "$CANDIDATE_RUN_ID"
             test -z "$REVIEWED_SHA256"
             test -z "$PUBLISH_CONFIRMATION"
@@ -177,16 +177,23 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          pattern: cli-native-*
-          merge-multiple: true
-          path: native-artifacts
       - name: Verify four native receipts and pack the npm candidate
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$JS_SHA"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" > "$RUNNER_TEMP/cli-artifacts.json"
+          mkdir native-artifacts
+          for tag in darwin-arm64 darwin-x64 linux-x64 win32-x64; do
+            read -r artifact_id artifact_digest < <(
+              node .github/scripts/cli-release-artifacts.mjs select-native \
+                "$tag" "$GITHUB_RUN_ID" "$JS_SHA" < "$RUNNER_TEMP/cli-artifacts.json"
+            )
+            archive="$RUNNER_TEMP/cli-native-$tag.zip"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > "$archive"
+            node .github/scripts/cli-release-artifacts.mjs verify-native-archive \
+              "$archive" "$tag" "$artifact_digest"
+            unzip -q "$archive" -d native-artifacts
+          done
           node .github/scripts/cli-release-artifacts.mjs assemble \
             native-artifacts packages/lenso-cli "$JS_SHA" "$RUST_SHA" \
             "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" < "$RUNNER_TEMP/cli-artifacts.json"
@@ -196,7 +203,7 @@ jobs:
           mkdir release-artifacts
           npm pack ./packages/lenso-cli --pack-destination release-artifacts
           shopt -s nullglob
-          archives=(release-artifacts/*.tgz)
+          archives=(./release-artifacts/*.tgz)
           test "${#archives[@]}" -eq 1
           node .github/scripts/cli-release-artifacts.mjs manifest \
             "${archives[0]}" release-artifacts/manifest.json "$JS_SHA" "$RUST_SHA" \
@@ -230,7 +237,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          archives=(release-artifacts/*.tgz)
+          archives=(./release-artifacts/*.tgz)
           test "${#archives[@]}" -eq 1
           npm install --prefix "$RUNNER_TEMP/cli-consumer" --ignore-scripts --no-audit --no-fund "${archives[0]}"
           node --input-type=commonjs -e '
@@ -296,7 +303,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          archives=(release-artifacts/*.tgz)
+          archives=(./release-artifacts/*.tgz)
           test "${#archives[@]}" -eq 1
           node .github/scripts/cli-release-artifacts.mjs verify-candidate \
             "${archives[0]}" release-artifacts/manifest.json "$JS_SHA" "$RUST_SHA" \
@@ -307,6 +314,6 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          archives=(release-artifacts/*.tgz)
+          archives=(./release-artifacts/*.tgz)
           test "${#archives[@]}" -eq 1
           npm publish "${archives[0]}" --ignore-scripts --access public --provenance --registry=https://registry.npmjs.org/

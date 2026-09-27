@@ -83,8 +83,9 @@ and Windows x64, then puts their source and artifact receipts inside one npm
 archive. Four clean consumers install that archive and create an App. The
 workflow is a candidate gate until a successful remote run proves all four
 targets. A later, separately authorized publish run must reuse that successful
-run's immutable archive, match its reviewed SHA-256, find both commits on main,
-and pass the unoccupied-version check. Configure npm Trusted Publishing for
+run's immutable archive, match its reviewed SHA-256, require the JS commit to
+be the current main HEAD and the Rust commit to be on main, and pass the
+unoccupied-version check. Configure npm Trusted Publishing for
 this workflow before authorizing publish; neither a local pack nor a dry run
 publishes the candidate.
 See [Workers npm release guidance](docs/workers-npm-release.md) for the
