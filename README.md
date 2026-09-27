@@ -80,8 +80,10 @@ is built entirely in this workspace. `@lenso/cli` is not yet a release choice:
 its published archive needs four platform-specific native executables from the
 Rust workspace, and this workflow does not build or assemble them. A separate
 cross-repository packaging gate is required before moving that publication
-path here. The local CLI `npm pack --dry-run` command above checks package
-shape only; it is not publication proof without those executables.
+path here. The local CLI `npm pack --dry-run` requires the four native
+executables and checks their formats and architectures. It does not verify
+their source revision or behavior on each target; those checks belong in the
+cross-repository packaging gate.
 See [Workers npm release guidance](docs/workers-npm-release.md) for the
 reviewed-archive hash and Trusted Publisher requirements.
 

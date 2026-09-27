@@ -26,6 +26,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "smoke": "node scripts/check-npm-shim.mjs && node --test scripts/host-extract.test.mjs scripts/host-owner.test.mjs scripts/distribution-host.test.mjs",
+    "prepack": "node scripts/check-npm-publish.mjs",
     "prepublishOnly": "node scripts/check-npm-publish.mjs"
   },
   "dependencies": {
