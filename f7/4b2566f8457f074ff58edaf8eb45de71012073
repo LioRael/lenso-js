@@ -1,0 +1,48 @@
+.github/scripts/cli-release-artifacts.test.mjs
+  s_7d146975368699::t_028b9fa16f7953 117-142
+  s_7d146975368699::t_b594bb81b67787 11,98,103,111
+  s_7d146975368699::t_b70a5c587462b9 1-10,12-97,99-102,104-110,112-116
+packages/lenso-cli/README.md
+  s_7d146975368699::t_bb4ea6fae25ddf 15-17
+packages/lenso-cli/scripts/check-npm-shim.mjs
+  s_7d146975368699::t_aed83b897785bd 12,15-16
+.github/scripts/cli-release-artifacts.mjs
+  s_7d146975368699::t_63216b74832a1b 6
+  s_7d146975368699::t_ad714aa5127a96 1-5,7-16,18-81,84-160,164-223,227-230,232-268
+  s_7d146975368699::t_c18612701ac073 17,82-83,161-163,224-226,231
+.github/workflows/release-cli-npm.yml
+  s_7d146975368699::t_6592fb1bededd9 1-29,31-246,250-312
+  s_7d146975368699::t_74279d0a6caa3d 30
+  s_7d146975368699::t_fcbb8a625c727b 247-249
+packages/lenso-cli/scripts/check-npm-publish.mjs
+  s_7d146975368699::t_f4fefb0b6c9d89 2-3,9-12,14,16,57-78
+packages/lenso-cli/src/lenso.ts
+  s_7d146975368699::t_aed83b897785bd 9-14,18-22,27-29
+packages/lenso-cli/package.json
+  s_7d146975368699::t_aed83b897785bd 3
+  s_7d146975368699::t_b70a5c587462b9 28
+README.md
+  s_7d146975368699::t_145a97eb79a369 78-89
+bun.lock
+  s_7d146975368699::t_ef652c045a870f 45
+packages/lenso-cli/bin/lenso.d.ts
+  s_7d146975368699::t_7b0e8a578e8fab 5-6
+packages/lenso-cli/bin/lenso.js
+  s_7d146975368699::t_444bc34abdde35 14-19,21-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f74b2566f8457f074ff58edaf8eb45de71012073",
+  "prompts": {},
+  "sessions": {
+    "s_7d146975368699": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c54a-381f-7362-9b4d-95aea89e2437",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "LioRael <leo@lenso.dev>"
+    }
+  }
+}
