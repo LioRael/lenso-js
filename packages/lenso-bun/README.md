@@ -23,3 +23,9 @@ verify all locked projections. Maintainers use `bun run capabilities:sync`
 after advancing an immutable source revision. Custom Capability projections
 remain an authoring-time code-generation path in the Bun package that owns
 them.
+
+This authoring SDK executes in Bun. Portable Capability schemas and use of Web
+APIs do not make a Bun Plugin executable in Workers. The Rust static Workers
+profile uses compiled Rust Plugin implementations and `@lenso/workers-runtime`;
+it does not embed Bun. A TypeScript/Guest Workers implementation needs its own
+supported compiler, Adapter and real target qualification before it is admitted.

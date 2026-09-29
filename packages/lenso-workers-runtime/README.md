@@ -10,6 +10,67 @@ JavaScript timer domain used by the `lenso-workers-driver` Rust crate. It does
 not resolve Plugins, grant network authority, authenticate, or authorize requests.
 The buffered HTTP Host entry is available starting with version 0.1.2.
 
+The `0.1.6` source candidate adds `./facilities` for the normal Rust static
+Workers App profile, `lenso.linked-rust-workers@1`. The Rust CLI resolves and
+compiles that graph; this JavaScript package owns event scopes and the Host
+facade. The candidate is unpublished until a separate release completes.
+Nonempty configuration, multiple typed Plugin Instances and named request Ports
+are carried in the resolved Kernel Plan. It does not admit arbitrary execution
+classes, streams/events, dynamic loading or cross-event Plugin memory.
+
+### Source-owned event facilities
+
+The generated Host supplies exact Instance/package identities, source-owned
+factory functions, and explicit operator grants to
+`createInstanceFacilityScope({ instances, grants, factories, env, limits })`.
+Business Plugins receive the owner's typed Rust handle, never the full `env`.
+Each JavaScript factory receives only `create(binding, scope, configuration)`.
+It must return its private adapter synchronously; that adapter starts asynchronous
+I/O through `scope.run` or `scope.operation`. SQL, credentials, identity policy
+and owner configuration schemas stay in the owner repository.
+
+```js
+import { createInstanceFacilityScope } from "@lenso/workers-runtime";
+import { create as createState } from "./owner-state.mjs";
+
+const createScope = (_request, env) => createInstanceFacilityScope({
+  instances: [{ instanceKey: "example.state/primary", packageId: "example.state" }],
+  factories: [{ packageId: "example.state", slot: "state", create: createState }],
+  grants: {
+    schema: "lenso.host-facilities.v1",
+    instances: {
+      "example.state/primary": {
+        state: { binding: "PRIMARY_DB", configuration: { profile: "owner-profile" } },
+      },
+    },
+  },
+  env,
+  limits: { cleanupTimeoutMs: 1000, maxOperations: 128 },
+});
+```
+
+The table matches exact identities and slot names before running a factory.
+Unknown Instances, slots, override fields, inherited environment properties and
+missing bindings fail closed. Owner configuration is copied and frozen. Two
+same-package Instances and multiple resource types are independent of table
+order. An explicit `binding: null` passes `undefined`; the owner decides whether
+that profile supplies an optional cache or a declared simulated backend. A
+simulated backend is not real DB qualification.
+
+The internal `facility(scope, instanceKey, slot)` entry is used by generated
+Host glue to construct one private adapter per event lease. Closed scopes cannot
+construct adapters or start I/O. Late results cannot enter a replacement
+generation. Cleanup uncertainty is preserved and never causes automatic replay
+of a write. A Rust Plugin's memory is reconstructed on every HTTP event; durable
+state belongs to the selected owner backend.
+
+Run `node fixtures/workers-http-parity/packed-facilities.mjs /tmp/receipt.json`
+from this repository for an isolated packed-consumer proof. Its stand-in tests
+cover scope/identity/explicit-none boundaries, not real PG or D1. Owner fixtures
+record real driver, binding identities, compatibility date, migration state,
+query-cache mode and exact artifacts separately. Remote Hyperdrive acceptance
+is deferred for this candidate and must be recorded as `not_run`.
+
 The candidate `./component-requests` entry admits one already-selected
 `lenso.wasm-component@1` Instance from a V4 Plan for the request-only
 `lenso.json-request@1` Guest ABI. It compares the Guest's ready descriptor with
@@ -33,7 +94,7 @@ generate a Plan, run the Kernel,
 provide HTTP routing or Auth policy, enforce Guest memory/turn limits, or build
 a Workers distribution. Its caller must supply the exact verified artifact and
 resolved Plan from its own Host authority. The public `app build/prepare`
-Workers targets remain independently gated; this entry alone is a bounded
+Workers Component targets remain independently gated; this entry alone is a bounded
 Adapter primitive, not an App builder or deployment qualification. The Rust
 local Bundle-only App target is a separate candidate and must supply the
 trusted digest map for V2.
@@ -191,3 +252,9 @@ responses. Web owns that transport and its Capability, not Runtime.
 When supplying `createScope`, configure its cleanup and operation limits in that
 factory. Passing scope limits to the Host at the same time is rejected, so a
 custom factory cannot silently ignore a Host limit.
+
+The default event deadline is 1000 ms and default native cleanup budget is
+250 ms. Configure explicit budgets for observed infrastructure latency. The
+source Rust build's `--workers-host-limits` profile writes the selected limits
+into its build receipt and routes scope limits to its generated scope factory.
+Extending a budget does not prove side-effect rollback or CPU preemption.

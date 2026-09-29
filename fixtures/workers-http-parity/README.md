@@ -1,5 +1,8 @@
 # Local Workers HTTP parity fixture
 
+For the source candidate's isolated packed facility consumer and real-resource
+receipt requirements, see [Facility consumer and infrastructure evidence](facility-resources.md).
+
 This fixture joins the public `@lenso/workers-runtime` HTTP Host to the Rust
 `lenso-workers-http-parity-host` fixture and the canonical Web Ingress corpus.
 It is a local workerd target probe, not a deployment provider, production

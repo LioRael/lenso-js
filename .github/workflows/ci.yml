@@ -24,12 +24,14 @@ jobs:
         with:
           toolchain: "1.94.0"
       - run: bun install --frozen-lockfile
-      - run: cargo install lenso-contract-codegen --version 0.9.0 --locked
+      - run: cargo install lenso-contract-codegen --version 0.10.0 --locked
       - run: bun run --filter '@lenso/bun' capabilities:check
       - run: bun run build
       - run: bun run typecheck
       - run: bun run test:typescript
       - run: bun run test:workers
+      - name: Run isolated packed facility consumer
+        run: node fixtures/workers-http-parity/packed-facilities.mjs /tmp/lenso-packed-facilities.json
       - run: bun run package-smoke
       - run: npm pack --dry-run ./packages/lenso-bun
       - run: npm pack --dry-run ./packages/lenso-bun-plugin

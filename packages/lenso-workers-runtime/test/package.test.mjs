@@ -5,6 +5,7 @@ import test from "node:test";
 test("workspace package preserves its public Workers entrypoints and CLI", async () => {
   const root = await import("@lenso/workers-runtime");
   const host = await import("@lenso/workers-runtime/host");
+  const facilities = await import("@lenso/workers-runtime/facilities");
   const http = await import("@lenso/workers-runtime/http");
   const runner = await import("@lenso/workers-runtime/runner");
   const clock = await import("@lenso/workers-runtime/clock");
@@ -13,6 +14,7 @@ test("workspace package preserves its public Workers entrypoints and CLI", async
   const knowledgeSettings = await import("@lenso/workers-runtime/knowledge-settings-local");
 
   assert.equal(root.createWorkersHttpHost, host.createWorkersHttpHost);
+  assert.equal(root.createInstanceFacilityScope, facilities.createInstanceFacilityScope);
   assert.equal(root.createHttpHandler, http.createHttpHandler);
   assert.equal(root.createEventRunner, runner.createEventRunner);
   assert.equal(typeof root.createEventScope, "function");

@@ -10,7 +10,7 @@
     "LICENSE"
   ],
   "devDependencies": {
-    "@lenso/workers-runtime": "0.1.5"
+    "@lenso/workers-runtime": "0.1.6"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
