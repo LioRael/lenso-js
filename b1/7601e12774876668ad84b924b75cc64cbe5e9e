@@ -1,0 +1,22 @@
+.github/scripts/cli-release-artifacts.mjs
+  s_7d146975368699::t_e67b6ad972421a 32-33,228-232
+.github/scripts/cli-release-artifacts.test.mjs
+  s_7d146975368699::t_e67b6ad972421a 137-138,149-150,153
+  s_7d146975368699::t_98511ebd9d4b0a 154
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b17601e12774876668ad84b924b75cc64cbe5e9e",
+  "prompts": {},
+  "sessions": {
+    "s_7d146975368699": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c54a-381f-7362-9b4d-95aea89e2437",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "LioRael <leo@lenso.dev>"
+    }
+  }
+}
