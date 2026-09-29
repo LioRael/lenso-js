@@ -29,7 +29,8 @@ const digest = /^sha256:[0-9a-f]{64}$/;
 const runId = /^[1-9][0-9]*$/;
 const receiptSchema = 'lenso.cli.native.v1';
 const manifestSchema = 'lenso.cli.npm-candidate.v1';
-const workflowPath = '.github/workflows/release-cli-npm.yml@';
+const workflowPath = '.github/workflows/release-cli-npm.yml';
+const workflowId = 368640610;
 
 function regularFile(path) {
   const stat = lstatSync(path);
@@ -224,7 +225,11 @@ function inspectRun(run, id, jsSha) {
   assert.match(jsSha, sha);
   assert.equal(String(run.id), id);
   assert.equal(run.repository?.full_name, process.env.GITHUB_REPOSITORY);
-  assert.ok(run.path?.startsWith(workflowPath), 'candidate came from another workflow');
+  assert.equal(run.workflow_id, workflowId, 'candidate came from another workflow');
+  assert.ok(
+    run.path === workflowPath || run.path?.startsWith(`${workflowPath}@`),
+    'candidate came from another workflow',
+  );
   assert.equal(run.event, 'workflow_dispatch');
   assert.equal(run.status, 'completed');
   assert.equal(run.conclusion, 'success');

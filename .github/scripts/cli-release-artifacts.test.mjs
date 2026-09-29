@@ -134,7 +134,8 @@ test('publish selection rejects an incomplete or unrelated candidate run', (t) =
   const run = {
     id: Number(id),
     repository: { full_name: 'LioRael/lenso-js' },
-    path: '.github/workflows/release-cli-npm.yml@refs/heads/candidate/cli',
+    workflow_id: 368640610,
+    path: '.github/workflows/release-cli-npm.yml',
     event: 'workflow_dispatch',
     status: 'completed',
     conclusion: 'success',
@@ -145,7 +146,11 @@ test('publish selection rejects an incomplete or unrelated candidate run', (t) =
   let result = invoke(['inspect-run', id, jsSha], run, env);
   assert.equal(result.status, 0, result.stderr);
   assert.match(readFileSync(output, 'utf8'), /candidate_attempt=1/);
+  result = invoke(['inspect-run', id, jsSha], { ...run, path: `${run.path}@refs/heads/candidate/cli` }, env);
+  assert.equal(result.status, 0, result.stderr);
   result = invoke(['inspect-run', id, jsSha], { ...run, conclusion: 'failure' }, env);
+  assert.notEqual(result.status, 0);
+  result = invoke(['inspect-run', id, jsSha], { ...run, workflow_id: 1 }, env);
   assert.notEqual(result.status, 0);
   result = invoke(['inspect-run', id, jsSha], { ...run, path: '.github/workflows/other.yml@main' }, env);
   assert.notEqual(result.status, 0);
