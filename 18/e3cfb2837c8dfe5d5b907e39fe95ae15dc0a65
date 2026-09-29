@@ -1,0 +1,21 @@
+bun.lock
+  s_f4202e28c6b5b1::t_563ebe6251e181 45
+packages/lenso-cli/package.json
+  s_f4202e28c6b5b1::t_7be6aec8fd90d3 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "18e3cfb2837c8dfe5d5b907e39fe95ae15dc0a65",
+  "prompts": {},
+  "sessions": {
+    "s_f4202e28c6b5b1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ee9e-623b-7d12-a648-d8b462390eec",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "LioRael <leo@lenso.dev>"
+    }
+  }
+}
