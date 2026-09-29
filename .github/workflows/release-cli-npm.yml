@@ -78,12 +78,12 @@ jobs:
           [[ "$JS_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$RUST_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$GITHUB_SHA" = "$JS_SHA"
           test "$(git rev-parse HEAD)" = "$JS_SHA"
           test "$(git -C rust rev-parse HEAD)" = "$RUST_SHA"
           test "$(node -p "require('./packages/lenso-cli/package.json').name")" = '@lenso/cli'
           test "$(node -p "require('./packages/lenso-cli/package.json').version")" = "$RELEASE_VERSION"
           if [[ "$RELEASE_MODE" == dry-run ]]; then
+            test "$GITHUB_SHA" = "$JS_SHA"
             test -z "$CANDIDATE_RUN_ID"
             test -z "$REVIEWED_SHA256"
             test -z "$PUBLISH_CONFIRMATION"
@@ -94,7 +94,15 @@ jobs:
             [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
             [[ "$REVIEWED_SHA256" =~ ^sha256:[0-9a-f]{64}$ ]]
             git fetch origin main --no-tags
+            test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
             git merge-base --is-ancestor "$JS_SHA" origin/main
+            if [[ "$GITHUB_SHA" != "$JS_SHA" ]]; then
+              # Reuse only this reviewed archive across the workflow-only path repair.
+              test "$JS_SHA" = b17601e12774876668ad84b924b75cc64cbe5e9e
+              test "$CANDIDATE_RUN_ID" = 36544130819
+              test "$(git rev-list --count "$JS_SHA..$GITHUB_SHA")" -eq 1
+              test "$(git diff --name-only "$JS_SHA" "$GITHUB_SHA")" = .github/workflows/release-cli-npm.yml
+            fi
             git -C rust fetch origin main --no-tags
             git -C rust merge-base --is-ancestor "$RUST_SHA" origin/main
           fi
@@ -311,10 +319,10 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          archives=(./release-artifacts/*.tgz)
+          archives=(./release-artifacts/cli-npm-candidate/*.tgz)
           test "${#archives[@]}" -eq 1
           node .github/scripts/cli-release-artifacts.mjs verify-candidate \
-            "${archives[0]}" release-artifacts/manifest.json "$JS_SHA" "$RUST_SHA" \
+            "${archives[0]}" release-artifacts/cli-npm-candidate/manifest.json "$JS_SHA" "$RUST_SHA" \
             "$CANDIDATE_RUN_ID" "$CANDIDATE_ATTEMPT" "$RELEASE_VERSION" "$REVIEWED_SHA256" \
             "$CANDIDATE_ARTIFACT_ID" "$CANDIDATE_ARTIFACT_DIGEST" < "$RUNNER_TEMP/cli-artifacts.json"
           node .github/scripts/check-npm-release-version.mjs '@lenso/cli' "$RELEASE_VERSION"
@@ -322,6 +330,6 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          archives=(./release-artifacts/*.tgz)
+          archives=(./release-artifacts/cli-npm-candidate/*.tgz)
           test "${#archives[@]}" -eq 1
           npm publish "${archives[0]}" --ignore-scripts --access public --provenance --registry=https://registry.npmjs.org/
