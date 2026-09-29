@@ -1,0 +1,48 @@
+packages/lenso-web-ingress-workers/package.json
+  s_f4202e28c6b5b1::t_72485c847043fa 13
+.github/workflows/ci.yml
+  s_f4202e28c6b5b1::t_0d78815131f739 27,33-34
+packages/lenso-workers-runtime/package.json
+  s_f4202e28c6b5b1::t_3b7f7408cd8fcd 10,23
+  s_f4202e28c6b5b1::t_e75120f16d1557 3
+packages/lenso-workers-runtime/facilities.mjs
+  s_f4202e28c6b5b1::t_3b7f7408cd8fcd 1-105
+packages/lenso-workers-runtime/test/facilities.test.mjs
+  s_f4202e28c6b5b1::t_3b7f7408cd8fcd 1-59,84-102
+  s_f4202e28c6b5b1::t_2f11ec38cd2579 60-83
+packages/lenso-workers-runtime/index.mjs
+  s_f4202e28c6b5b1::t_3b7f7408cd8fcd 5
+packages/lenso-workers-runtime/test/package.test.mjs
+  s_f4202e28c6b5b1::t_3c90c66bf30f04 8,17
+packages/lenso-workers-runtime/README.md
+  s_f4202e28c6b5b1::t_38ad8ea3355205 13-73,97,255-260
+packages/lenso-bun/README.md
+  s_f4202e28c6b5b1::t_38ad8ea3355205 26-31
+fixtures/workers-http-parity/facility-resources.md
+  s_f4202e28c6b5b1::t_cc414664302adf 1-51
+fixtures/workers-http-parity/README.md
+  s_f4202e28c6b5b1::t_cc414664302adf 3-5
+fixtures/workers-http-parity/packed-facilities.mjs
+  s_f4202e28c6b5b1::t_2f11ec38cd2579 33
+  s_f4202e28c6b5b1::t_cc414664302adf 32
+  s_f4202e28c6b5b1::t_3c90c66bf30f04 1-13,15-17,20-31,34-39
+  s_f4202e28c6b5b1::t_6e42b3b2f9edd6 14,18-19
+bun.lock
+  s_f4202e28c6b5b1::t_e30388a0542a0f 89,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eaf75f620756ecc8f5ef9613ff7ce889cd7359b1",
+  "prompts": {},
+  "sessions": {
+    "s_f4202e28c6b5b1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ee9e-623b-7d12-a648-d8b462390eec",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "LioRael <leo@lenso.dev>"
+    }
+  }
+}
