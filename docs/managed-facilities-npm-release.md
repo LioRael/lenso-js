@@ -6,8 +6,9 @@ landing this change. The public registry was read on 2026-09-30: its latest CLI
 was `0.17.4`, its latest Workers runtime was `0.1.5`, and both candidate versions
 were unoccupied. Each publish job checks occupancy again.
 
-The CLI archive must contain native `lenso 0.6.5` binaries built from exact Rust
-source `cac6db9d3293197754cce0ec707e909e0bed79a6`. Its Rust managed-facilities SDK
+The CLI archive must contain native `lenso 0.6.5` binaries built from the final
+reviewed Rust source SHA supplied to the dry run. That exact SHA is retained in
+every binary receipt and the npm artifact manifest. Its managed-facilities SDK
 release set and normalized Cargo archive validation belong to `LioRael/lenso`;
 an npm launcher release does not publish those crates. The Workers runtime's
 files are unchanged from qualified source
