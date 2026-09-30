@@ -42,7 +42,7 @@
     },
     "packages/lenso-cli": {
       "name": "@lenso/cli",
-      "version": "0.17.4",
+      "version": "0.17.5",
       "bin": {
         "lenso": "bin/lenso.js",
       },
