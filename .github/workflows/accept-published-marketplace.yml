@@ -1,0 +1,131 @@
+name: Published CLI Marketplace acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [acceptance/published-cli-marketplace-20260930]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-cli-marketplace-acceptance
+  cancel-in-progress: false
+
+jobs:
+  content-only:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[run-marketplace-acceptance]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Verify the exact public npm archive and native executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          scratch_dir="$(mktemp -d "$RUNNER_TEMP/published-marketplace.XXXXXX")"
+          mkdir "$scratch_dir/input" "$scratch_dir/output"
+          curl --disable --fail --silent --show-error --proto '=https' \
+            --connect-timeout 10 --max-time 90 --max-filesize 100000000 \
+            'https://registry.npmjs.org/@lenso/cli/-/cli-0.17.4.tgz' \
+            --output "$scratch_dir/cli.tgz"
+          printf '%s  %s\n' \
+            fe0d1f5bd61430b06abd1d4d2bde56a46b46d500bcd320e376710dddef4229a1 \
+            "$scratch_dir/cli.tgz" | sha256sum --check
+          python3 - "$scratch_dir" <<'PY'
+          import hashlib, pathlib, sys, tarfile
+          root = pathlib.Path(sys.argv[1])
+          with tarfile.open(root / 'cli.tgz', mode='r:gz') as archive:
+              members = [item for item in archive if item.name == 'package/vendor/linux-x64/lenso']
+              assert len(members) == 1 and members[0].isreg() and members[0].size == 68165800
+              with archive.extractfile(members[0]) as source:
+                  binary = source.read(68165801)
+              assert len(binary) == 68165800
+              assert hashlib.sha256(binary).hexdigest() == '570e5136b0bc30565ed551f6c9b04f840274a6d230ae026ef275bbbd28112c04'
+              executable = root / 'input/lenso'
+              executable.write_bytes(binary)
+              executable.chmod(0o500)
+          PY
+          test -f /etc/ssl/certs/ca-certificates.crt
+          printf 'ACCEPTANCE_SCRATCH=%s\n' "$scratch_dir" >> "$GITHUB_ENV"
+          docker pull --platform linux/amd64 \
+            ubuntu@sha256:496754492fb28b4d3049432f2ca787449331e23fb14f0dd3fffea86bf5a93eb4
+      - name: Preview and copy with the normal managed verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/amd64 --network bridge --read-only \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --cpus 2 --memory 1g --pids-limit 128 --ulimit fsize=134217728:134217728 \
+            --tmpfs /scratch:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            --mount "type=bind,src=$ACCEPTANCE_SCRATCH/input,dst=/input,readonly" \
+            --mount "type=bind,src=$ACCEPTANCE_SCRATCH/output,dst=/output" \
+            --mount 'type=bind,src=/etc/ssl/certs/ca-certificates.crt,dst=/etc/ssl/certs/ca-certificates.crt,readonly' \
+            ubuntu@sha256:496754492fb28b4d3049432f2ca787449331e23fb14f0dd3fffea86bf5a93eb4 \
+            env -i PATH=/usr/bin:/bin HOME=/scratch/home XDG_CACHE_HOME=/scratch/home/cache \
+            TMPDIR=/scratch SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+            timeout 240 sh -eu -c '
+              umask 077
+              mkdir -p /scratch/home /scratch/app
+              test "$(getconf GNU_LIBC_VERSION)" = "glibc 2.39"
+              test "$(/input/lenso --version)" = "lenso 0.6.4"
+              /input/lenso app add lenso.reference.knowledge-base-starter@1.0.0 \
+                --marketplace --root /scratch/app --content-id starter \
+                --content-destination templates/knowledge-base --content-preview > /output/preview.json
+              test ! -e /scratch/app/templates/knowledge-base
+              /input/lenso app add lenso.reference.knowledge-base-starter@1.0.0 \
+                --marketplace --root /scratch/app --content-id starter \
+                --content-destination templates/knowledge-base > /output/copy.txt
+              cp /scratch/app/templates/knowledge-base/.lenso-release-content.json /output/attribution.json
+              find /scratch/app/templates/knowledge-base -type f -printf "%P\n" > /output/files.txt
+            '
+      - name: Validate preview and copied-content facts without executing content
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$ACCEPTANCE_SCRATCH/output" <<'PY'
+          import json, os, pathlib, stat, sys
+          root = pathlib.Path(sys.argv[1])
+          def read(name):
+              fd = os.open(root / name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+              try:
+                  metadata = os.fstat(fd)
+                  assert stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
+                  assert 0 < metadata.st_size <= 1024 * 1024
+                  with os.fdopen(fd, 'rb', closefd=False) as source:
+                      data = source.read(metadata.st_size + 1)
+                  assert len(data) == metadata.st_size
+                  return data
+              finally:
+                  os.close(fd)
+          preview = json.loads(read('preview.json'))
+          attribution = json.loads(read('attribution.json'))
+          expected = {'plugin_id': 'lenso.reference.knowledge-base-starter', 'version': '1.0.0',
+                      'content_id': 'starter', 'content_kind': 'editable_template',
+                      'base_kind': 'content_only', 'execution': 'not_selected'}
+          for key, value in expected.items():
+              assert preview[key] == value and attribution[key] == value
+          assert preview['kind'] == 'lenso.keyless-release-content-preview'
+          assert preview['conflict'] is False and preview['destination'] == 'templates/knowledge-base'
+          assert attribution['catalog_id'] == 'lenso-official-v2'
+          assert attribution['adoption'] == 'editable_copy'
+          assert attribution['content_digest'] == 'sha256:5ba597240979579cc5d054522cf672f3e398d2cf61c792c1713eec723eaaccd2'
+          assert attribution['source_url'] == 'https://marketplace.lenso.dev/artifacts/5ba597240979579cc5d054522cf672f3e398d2cf61c792c1713eec723eaaccd2.tar.gz'
+          files = read('files.txt').decode('utf-8').splitlines()
+          assert 1 < len(files) <= 513 and len(set(files)) == len(files)
+          assert set(files) == set(preview['files']) | {'.lenso-release-content.json'}
+          assert all(not name.startswith('/') and '..' not in name.split('/') for name in files)
+          assert b'no extension or runtime was selected' in read('copy.txt')
+          print(f'PASS published npm CLI 0.17.4/native 0.6.4: normal managed Marketplace preview and editable copy of {len(preview["files"])} files; no private roots, tool override, build or content execution.')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: published-cli-marketplace-content-only
+          path: |
+            ${{ env.ACCEPTANCE_SCRATCH }}/output/preview.json
+            ${{ env.ACCEPTANCE_SCRATCH }}/output/attribution.json
+            ${{ env.ACCEPTANCE_SCRATCH }}/output/files.txt
+            ${{ env.ACCEPTANCE_SCRATCH }}/output/copy.txt
+          if-no-files-found: error
+          retention-days: 7
