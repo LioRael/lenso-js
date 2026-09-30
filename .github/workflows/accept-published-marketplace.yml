@@ -70,11 +70,11 @@ jobs:
               mkdir -p /scratch/home /scratch/app
               test "$(getconf GNU_LIBC_VERSION)" = "glibc 2.39"
               test "$(/input/lenso --version)" = "lenso 0.6.4"
-              /input/lenso app add lenso.reference.knowledge-base-starter@1.0.0 \
+              /input/lenso app add lenso.reference.knowledge-base-starter@0.1.0 \
                 --marketplace --root /scratch/app --content-id starter \
                 --content-destination templates/knowledge-base --content-preview > /output/preview.json
               test ! -e /scratch/app/templates/knowledge-base
-              /input/lenso app add lenso.reference.knowledge-base-starter@1.0.0 \
+              /input/lenso app add lenso.reference.knowledge-base-starter@0.1.0 \
                 --marketplace --root /scratch/app --content-id starter \
                 --content-destination templates/knowledge-base > /output/copy.txt
               cp /scratch/app/templates/knowledge-base/.lenso-release-content.json /output/attribution.json
@@ -101,7 +101,7 @@ jobs:
                   os.close(fd)
           preview = json.loads(read('preview.json'))
           attribution = json.loads(read('attribution.json'))
-          expected = {'plugin_id': 'lenso.reference.knowledge-base-starter', 'version': '1.0.0',
+          expected = {'plugin_id': 'lenso.reference.knowledge-base-starter', 'version': '0.1.0',
                       'content_id': 'starter', 'content_kind': 'editable_template',
                       'base_kind': 'content_only', 'execution': 'not_selected'}
           for key, value in expected.items():
