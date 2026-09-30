@@ -1,0 +1,31 @@
+packages/lenso-cli/package.json
+  s_f4202e28c6b5b1::t_8d158cc3797b2f 3
+docs/managed-facilities-npm-release.md
+  s_f4202e28c6b5b1::t_8d158cc3797b2f 1-33
+bun.lock
+  s_5ff7542a454fa3::t_f93b1603870ede 45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "82b1be55851c70314e604fcfa910ca87d1a8b8f7",
+  "prompts": {},
+  "sessions": {
+    "s_5ff7542a454fa3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ee9f-eed5-7742-aba9-a2175ebfceab",
+        "model": "unknown"
+      },
+      "human_author": "LioRael <leo@lenso.dev>"
+    },
+    "s_f4202e28c6b5b1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ee9e-623b-7d12-a648-d8b462390eec",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "LioRael <leo@lenso.dev>"
+    }
+  }
+}
