@@ -173,3 +173,29 @@ test("late completion remains fenced by the lower-level event scope", async () =
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(callbacks, 0);
 });
+
+test("Host cannot publish success when asynchronous scope cleanup rejects", async () => {
+  const { bindings } = generated();
+  const receipts = [];
+  const host = createWorkersHttpHost({
+    bindings,
+    wasmModule: {},
+    createScope() {
+      const scope = createEventScope();
+      let complete;
+      scope.operation(() => ({
+        promise: new Promise((resolve) => { complete = resolve; }),
+        async abort() {
+          complete();
+          throw new Error("native cleanup rejected");
+        },
+      }));
+      return scope;
+    },
+    clearTimers() {},
+    onReceipt: (receipt) => receipts.push(receipt),
+  });
+  const response = await host.fetch(new Request("https://lifecycle.invalid/"));
+  assert.equal(response.status, 503);
+  assert.equal(receipts.length, 0);
+});

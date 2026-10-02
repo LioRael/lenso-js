@@ -58,7 +58,13 @@ export function createEventScope(
       // Cancellation errors must be observed by bounded cleanup too.
       try {
         const result = resource.abort?.();
-        if (result !== undefined) trackNative(result);
+        if (result !== undefined) {
+          // Drain the failure observer too, so settlement cannot report clean
+          // before an asynchronous abort rejection has been recorded.
+          trackNative(Promise.resolve(result).catch(() => {
+            cleanupFailed = true;
+          }));
+        }
       } catch {
         cleanupFailed = true;
       }

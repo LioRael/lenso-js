@@ -153,6 +153,114 @@ test("abort failures are uncertain cleanup, never a successful receipt", async (
   assert.equal(await scope.settled(), false);
 });
 
+test("asynchronous abort rejection cannot issue a clean settlement receipt", async () => {
+  const scope = createEventScope();
+  const native = deferred();
+  scope.operation(() => ({
+    promise: native.promise,
+    async abort() {
+      native.resolve();
+      throw new Error("native cleanup rejected");
+    },
+  }));
+  scope.abort();
+  assert.equal(await scope.settled(), false);
+  assert.equal(scope.invalidated, true);
+});
+
+for (const outcome of ["resolve", "reject"]) {
+  test(`settlement drains asynchronous abort ${outcome} once after native completion`, async () => {
+    const scope = createEventScope();
+    const native = deferred(), cleanup = deferred();
+    let aborts = 0, releases = 0;
+    const operation = scope.operation(() => ({
+      promise: native.promise,
+      abort() {
+        aborts++;
+        native.resolve("closed");
+        return cleanup.promise.finally(() => releases++);
+      },
+    }));
+    // Cleanup may begin while the native completion is already being drained.
+    const settlement = scope.settled();
+    let finished = false;
+    settlement.then(() => { finished = true; });
+    scope.abort();
+    scope.abort();
+    operation.abort();
+    assert.equal(await operation.promise, "closed");
+    await tick();
+    assert.equal(aborts, 1);
+    assert.equal(releases, 0);
+    assert.equal(finished, false);
+    assert.equal(scope.settled(), settlement);
+    cleanup[outcome](new Error("cleanup failed"));
+    assert.equal(await settlement, outcome === "resolve");
+    assert.equal(releases, 1);
+    assert.equal(scope.invalidated, outcome === "reject");
+    let starts = 0;
+    await assert.rejects(scope.run(() => { starts++; }), /closed/);
+    assert.equal(starts, 0);
+    scope.abort();
+    assert.equal(aborts, 1);
+    assert.equal(await scope.settled(), outcome === "resolve");
+  });
+}
+
+test("asynchronous abort failure remains local and native rejection remains a domain result", async () => {
+  const failed = createEventScope(), healthy = createEventScope();
+  const native = deferred(), cleanup = deferred();
+  failed.operation(() => ({
+    promise: native.promise,
+    abort() {
+      native.resolve();
+      return cleanup.promise;
+    },
+  }));
+  failed.abort();
+  const settlement = failed.settled();
+  const domainFailure = new Error("native domain rejection");
+  await assert.rejects(
+    healthy.run(() => Promise.reject(domainFailure)),
+    (error) => error === domainFailure,
+  );
+  cleanup.reject(new Error("cleanup failed"));
+  assert.equal(await settlement, false);
+  assert.equal(failed.invalidated, true);
+  assert.equal(healthy.closed, false);
+  assert.equal(healthy.invalidated, false);
+  assert.equal(await healthy.run(() => Promise.resolve("still usable")), "still usable");
+  healthy.abort();
+  assert.equal(await healthy.settled(), true);
+});
+
+test("invalidated scope observes asynchronous abort failure without reviving callbacks", async () => {
+  const scope = createEventScope();
+  const native = deferred(), cleanup = deferred();
+  let callbacks = 0, aborts = 0;
+  scope.operation(() => ({
+    promise: native.promise,
+    async abort() {
+      aborts++;
+      try {
+        await cleanup.promise;
+      } finally {
+        native.resolve("late");
+      }
+    },
+  })).promise.then(() => callbacks++, () => callbacks++);
+  scope.attach(() => callbacks++);
+  scope.invalidate();
+  assert.equal(aborts, 0);
+  scope.abort();
+  const settlement = scope.settled();
+  cleanup.reject(new Error("cleanup failed"));
+  assert.equal(await settlement, false);
+  await tick();
+  assert.equal(callbacks, 0);
+  assert.equal(aborts, 1);
+});
+
 test("bindings cannot override lifecycle methods and are immutable", () => {
   assert.throws(() => createEventScope({ invalidate() {} }), /reserved/);
   const scope = createEventScope((owner) => ({
