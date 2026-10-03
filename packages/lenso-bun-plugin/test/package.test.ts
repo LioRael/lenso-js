@@ -17,3 +17,12 @@ test("published package exports build and extraction entrypoints", async () => {
   expect(build.fingerprintBuildInputs).toBeFunction();
   expect(extract.extractPluginDefinition).toBeFunction();
 });
+
+test("published pure authoring entry loads independently of Bun transport", async () => {
+  const authoring = await import("@lenso/bun-plugin/authoring");
+  expect(authoring.definePlugin).toBeFunction();
+  expect(authoring.dependency).toBeFunction();
+  expect(authoring.configuration).toBeFunction();
+  const targets = await import("@lenso/bun-plugin/targets");
+  expect(targets.buildPluginTarget).toBeFunction();
+});

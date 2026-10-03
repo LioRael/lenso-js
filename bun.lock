@@ -35,6 +35,7 @@
         "@lenso/contract-runtime": "0.3.1",
         "@lenso/process-protocol": "0.2.4",
         "typescript": "7.0.2",
+        "typescript-parser": "npm:typescript@5.9.3",
       },
       "devDependencies": {
         "@types/bun": "1.4.0",

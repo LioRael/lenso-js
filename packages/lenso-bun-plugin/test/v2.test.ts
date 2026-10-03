@@ -11,6 +11,8 @@ import {
 } from "@lenso/process-protocol";
 
 import { BUN_AUTHORING_CALLBACK_PROOF_HEADER } from "../src/v2.ts";
+import { buildPluginTarget } from "../src/targets.ts";
+import { CAPABILITY_ID as PROFILE_ID, DESCRIPTOR_DIGEST as PROFILE_DIGEST } from "./fixtures/generated/profile.ts";
 
 const fixture = new URL("./fixtures/v2-child.ts", import.meta.url).pathname;
 const blockingFixture = new URL("./fixtures/v2-blocking-child.ts", import.meta.url).pathname;
@@ -25,6 +27,96 @@ const STORE_DIGEST =
   "sha256:1100000000000000000000000000000000000000000000000000000000000011";
 const SYNC_DIGEST =
   "sha256:2200000000000000000000000000000000000000000000000000000000000022";
+
+test("same portable plugin.ts runs as two real Bun V2 instances with a typed dependency", async () => {
+  const root = new URL("../../../fixtures/source-first-request/", import.meta.url).pathname;
+  const script = root + "dist/native.js";
+  await buildPluginTarget({ entrypoint: root + "plugin.ts", outfile: script, target: "native-bun" });
+  const secret = randomValue(), session = randomValue();
+  const children: Awaited<ReturnType<typeof startChild>>[] = [];
+  let providerOrigin = "", nextRequest = 100;
+  const server = Bun.serve({
+    hostname: "127.0.0.1", port: 0,
+    async fetch(request) {
+      const message = await request.json() as { id: string; method: "lenso.call" | "lenso.settled"; params: any };
+      const expected = await proof(secret, authoringCallbackProofMessage(session, message.method, message.params));
+      if (!timingSafeEqual(
+        decodeBase64Url32(request.headers.get(BUN_AUTHORING_CALLBACK_PROOF_HEADER) ?? ""),
+        decodeBase64Url32(expected),
+      )) return new Response(null, { status: 401 });
+      let result: unknown = {};
+      if (message.method === "lenso.call") {
+        expect(message.params.requirement_id).toBe("upstream");
+        expect(message.params.route_id).toBe("upstream-a");
+        const upstream = await rpc(providerOrigin, "lenso.invoke", {
+          session, correlation_id: String(nextRequest++), endpoint_id: "profile",
+          capability_id: PROFILE_ID, descriptor_version: VERSION, descriptor_digest: PROFILE_DIGEST,
+          operation: message.params.operation, scope: message.params.scope, payload: message.params.payload,
+        });
+        result = { session, correlation_id: message.params.correlation_id, outcome: upstream.outcome };
+      }
+      return Response.json({ jsonrpc: "2.0", id: message.id, result });
+    },
+  });
+  const origin = `http://127.0.0.1:${server.port}/`;
+  function initializationFor(prefix: string, consumer: boolean): InitializeParams {
+    return {
+      api_version: 2, identity: identity(session, prefix), config: { prefix },
+      required_declarations: [{
+        requirement_id: "upstream", capability_id: PROFILE_ID,
+        descriptor_version: VERSION, descriptor_digest: PROFILE_DIGEST, cardinality: "optional",
+      }],
+      routes: consumer ? [{
+        route_id: "upstream-a", requirement_id: "upstream", capability_id: PROFILE_ID,
+        descriptor_version: VERSION, descriptor_digest: PROFILE_DIGEST,
+        provider_instance: "provider-a", provider_order: 0,
+      }] : [],
+      provided_endpoints: [{
+        endpoint_id: "profile", capability_id: PROFILE_ID,
+        descriptor_version: VERSION, descriptor_digest: PROFILE_DIGEST,
+      }],
+      limits: limits(2),
+    };
+  }
+  try {
+    for (const prefix of ["provider-a", "consumer-b"]) {
+      const child = await startChild(script, secret, origin);
+      children.push(child);
+      if (prefix === "provider-a") providerOrigin = child.origin;
+      await initializeChild(child.origin, secret, origin, initializationFor(prefix, prefix === "consumer-b"));
+      await rpc(child.origin, "lenso.construct", {
+        session, lifecycle_scope_id: "construct-" + prefix, remaining_budget_nanos: "1000000000",
+      });
+    }
+    for (const calls of [1, 2]) {
+      const result = await rpc(children[1]!.origin, "lenso.invoke", {
+        session, correlation_id: String(calls), endpoint_id: "profile",
+        capability_id: PROFILE_ID, descriptor_version: VERSION, descriptor_digest: PROFILE_DIGEST,
+        operation: "corpus_round_trip",
+        scope: { scope_id: "invoke-" + calls, parent_scope_id: null, remaining_budget_nanos: "1000000000", permissions: [], extensions: [] },
+        payload: { value: { name: calls === 1 ? "Ada" : "Grace" } },
+      });
+      expect(result.outcome).toMatchObject({
+        kind: "success", value: { value: {
+          message: "hello consumer-b", calls,
+          upstream: { message: "hello provider-a", calls },
+        } },
+      });
+    }
+    for (const [index, child] of [...children].reverse().entries()) {
+      await rpc(child.origin, "lenso.stop", {
+        session, cleanup_scope_id: "cleanup-" + index, remaining_budget_nanos: "1000000000",
+      });
+      expect(await child.process.exited).toBe(0);
+    }
+  } finally {
+    for (const child of children) {
+      if (child.process.exitCode === null) child.process.kill();
+      await child.process.exited;
+    }
+    server.stop();
+  }
+});
 
 test("constructs once, calls a named Host route, and stops over V2 HTTP", async () => {
   const session = randomValue();

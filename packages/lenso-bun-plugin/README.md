@@ -47,3 +47,10 @@ Adapter; the portable contract, requirement identity, and Host-selected routes
 do not.
 
 Generated entrypoints call the low-level Bun serving functions. Authors export the definition and do not call `serve` themselves. The older `providers`, `provider(...)`, `bind*Provider(...)`, and raw binding types remain as a compatibility and Adapter-lowering seam, but ordinary authoring should use generated Capability values through `provides`.
+
+## Target-independent declarations
+
+For the same-source Native Bun/Workers Request slice, import declarations from
+`@lenso/bun-plugin/authoring`; compile explicit targets with
+`@lenso/bun-plugin/targets`. Existing root imports keep their Native behavior.
+See [the runnable example and support boundary](../../fixtures/source-first-request/README.md).

@@ -31,6 +31,11 @@ jobs:
       - run: bun run typecheck
       - run: bun run test:typescript
       - run: bun run test:workers
+      - name: Qualify source-first Request in real workerd
+        run: |
+          npm ci --ignore-scripts --prefix fixtures/source-first-request/tooling
+          bun fixtures/source-first-request/build.ts
+          python3 fixtures/source-first-request/run.py --workerd fixtures/source-first-request/tooling/node_modules/@cloudflare/workerd-linux-64/bin/workerd --output /tmp/lenso-source-first-workerd.json
       - name: Run isolated packed facility consumer
         run: node fixtures/workers-http-parity/packed-facilities.mjs /tmp/lenso-packed-facilities.json
       - run: bun run package-smoke

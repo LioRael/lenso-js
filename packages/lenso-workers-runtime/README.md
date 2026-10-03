@@ -258,3 +258,12 @@ The default event deadline is 1000 ms and default native cleanup budget is
 source Rust build's `--workers-host-limits` profile writes the selected limits
 into its build receipt and routes scope limits to its generated scope factory.
 Extending a budget does not prove side-effect rollback or CPU preemption.
+
+## Source-first TS Request projection
+
+`@lenso/workers-runtime/plugin` exposes a Request-only execution projection for
+complete-object TS Plugin definitions. It requires Host-admitted endpoints,
+Plan-bound authorized dependency call functions and a finite lifecycle context.
+See [the real workerd example and integration boundary](../../fixtures/source-first-request/README.md).
+Generic TS Stream/Event admission remains rejected pending physical session
+cleanup evidence; existing Workers HTTP streaming behavior is unchanged.

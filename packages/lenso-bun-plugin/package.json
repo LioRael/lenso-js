@@ -25,6 +25,16 @@
       "types": "./dist/extract.d.ts",
       "import": "./dist/extract.js",
       "default": "./dist/extract.js"
+    },
+    "./authoring": {
+      "types": "./dist/authoring.d.ts",
+      "import": "./dist/authoring.js",
+      "default": "./dist/authoring.js"
+    },
+    "./targets": {
+      "types": "./dist/targets.d.ts",
+      "import": "./dist/targets.js",
+      "default": "./dist/targets.js"
     }
   },
   "main": "./dist/index.js",
@@ -36,7 +46,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && bun build src/index.ts src/build.ts src/extract.ts --target=bun --format=esm --outdir=dist --entry-naming='[name].js' --external 'typescript/*' && tsc -p tsconfig.build.json",
+    "build": "node scripts/clean-dist.mjs && bun build src/index.ts src/authoring.ts src/targets.ts src/build.ts src/extract.ts --target=bun --format=esm --outdir=dist --entry-naming='[name].js' --external 'typescript/*' --external typescript-parser && tsc -p tsconfig.build.json",
     "prepack": "bun run build",
     "smoke": "bun test test/package.test.ts",
     "test": "bun test test"
@@ -44,7 +54,8 @@
   "dependencies": {
     "@lenso/contract-runtime": "0.3.1",
     "@lenso/process-protocol": "0.2.4",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "typescript-parser": "npm:typescript@5.9.3"
   },
   "devDependencies": {
     "@types/bun": "1.4.0"

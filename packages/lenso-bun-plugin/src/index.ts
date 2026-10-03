@@ -114,12 +114,12 @@ type DependencyClients<Dependencies extends DependencyTable> = {
     : never;
 };
 
-interface LegacyPluginInputs<Dependencies extends DependencyTable, Config> {
+export interface LegacyPluginInputs<Dependencies extends DependencyTable, Config> {
   readonly config: Config;
   readonly dependencies: DependencyClients<Dependencies>;
 }
 
-interface LegacyPluginOptions<
+export interface LegacyPluginOptions<
   Dependencies extends DependencyTable,
   Config,
   Instance,
@@ -135,7 +135,7 @@ interface LegacyPluginOptions<
   readonly maxConcurrentRequests?: number;
 }
 
-interface LegacyPluginDefinition<
+export interface LegacyPluginDefinition<
   Dependencies extends DependencyTable,
   Config,
   Instance,
@@ -246,159 +246,6 @@ interface ActivationRequest {
   readonly imports_token: string;
   readonly imports: ReadonlyArray<CapabilityImportDescriptor>;
 }
-
-export function definePlugin<
-  Factory extends (...arguments_: never[]) => object | Promise<object>,
-  Config extends ConfigDeclaration<unknown> | undefined = undefined,
-  Dependencies extends DependencyDeclarations | undefined = undefined,
->(
-  options: PluginOptionsWithCreate<Config, Dependencies, Factory>,
-): PluginDefinition<
-  import("./authoring.js").CreatedInstance<Factory>,
-  Config,
-  Dependencies
->;
-export function definePlugin<
-  Config extends ConfigDeclaration<unknown> | undefined = undefined,
-  Dependencies extends DependencyDeclarations | undefined = undefined,
->(
-  options: PluginOptionsWithDefaultInstance<Config, Dependencies>,
-): PluginDefinition<
-  PluginOptionsInstance<Config, Dependencies>,
-  Config,
-  Dependencies
->;
-export function definePlugin<
-  Dependencies extends DependencyTable = Readonly<Record<never, never>>,
-  Config = unknown,
-  Instance extends object = LegacyPluginInputs<Dependencies, Config>,
->(
-  options: LegacyPluginOptions<Dependencies, Config, Instance>,
-): LegacyPluginDefinition<Dependencies, Config, Instance>;
-export function definePlugin(
-  options: object,
-): object {
-  const candidate = options as {
-    readonly provides?: ReadonlyArray<CapabilityProviderContract<object>>;
-    readonly providers?: ReadonlyArray<PluginProvider<object>>;
-    readonly dependencies?: Readonly<Record<string, unknown>>;
-    readonly config?: ConfigDeclaration<unknown>;
-    readonly configurationSchema?: boolean | Readonly<Record<string, unknown>>;
-    readonly decodeConfig?: (value: unknown) => unknown;
-    readonly create?: (...arguments_: never[]) => object | Promise<object>;
-    readonly stop?: (...arguments_: never[]) => void | Promise<void>;
-    readonly maxConcurrentRequests?: number;
-  };
-  if ((candidate.provides === undefined) === (candidate.providers === undefined)) {
-    throw new Error("definePlugin requires exactly one of provides or providers");
-  }
-  const providers: ReadonlyArray<PluginProvider<object>> = candidate.provides === undefined
-    ? candidate.providers!
-    : candidate.provides.map((contract) => {
-        if (
-          contract.kind !== "lenso.capability" ||
-          typeof contract.bindProvider !== "function"
-        ) {
-          throw new Error("provides entries must be generated Capability contracts");
-        }
-        return Object.freeze({
-          kind: "lenso.provider" as const,
-          descriptor: contract.descriptor,
-          bind: (instance: object) => contract.bindProvider(instance),
-        });
-      });
-  const seen = new Set<string>();
-  for (const provider of providers) {
-    validateDescriptor(provider.descriptor);
-    if (seen.has(provider.descriptor.capability_id)) {
-      throw new Error(
-        `duplicate Capability Provider ${provider.descriptor.capability_id}`,
-      );
-    }
-    seen.add(provider.descriptor.capability_id);
-  }
-  if (candidate.dependencies !== undefined) {
-    const dependencyIds = new Set<string>();
-    for (const [name, raw] of Object.entries(candidate.dependencies)) {
-      if (name.length === 0) throw new Error("dependency name must not be empty");
-      if (typeof raw !== "object" || raw === null) {
-        throw new Error(`dependency ${name} is invalid`);
-      }
-      if (!("kind" in raw)) {
-        const legacy = raw as import("./authoring.js").CapabilityDependencyBinding<unknown>;
-        validateDescriptor(legacy.descriptor);
-        continue;
-      }
-      const declaration = raw as import("./authoring.js").DependencyDeclaration<
-        unknown,
-        import("./authoring.js").DependencyCardinality
-      >;
-      if (declaration.kind !== "lenso.dependency") {
-        throw new Error(`dependency ${name} is not a dependency(...) declaration`);
-      }
-      const dependencyId = declaration.id ?? name;
-      if (dependencyId.length === 0) throw new Error("dependency id must not be empty");
-      if (dependencyIds.has(dependencyId)) throw new Error(`duplicate dependency id ${dependencyId}`);
-      dependencyIds.add(dependencyId);
-      validateDescriptor(declaration.contract.descriptor);
-      if (
-        declaration.cardinality !== "one" &&
-        declaration.cardinality !== "optional" &&
-        declaration.cardinality !== "many"
-      ) {
-        throw new Error(
-          `dependency ${dependencyId} has invalid cardinality ${String(declaration.cardinality)}`,
-        );
-      }
-    }
-  }
-  if (
-    candidate.config !== undefined &&
-    (candidate.config.kind !== "lenso.config" ||
-      typeof candidate.config.parse !== "function" ||
-      (typeof candidate.config.schema !== "boolean" &&
-        (typeof candidate.config.schema !== "object" ||
-          candidate.config.schema === null ||
-          Array.isArray(candidate.config.schema))))
-  ) {
-    throw new Error("config must be a configuration(...) declaration");
-  }
-  const maxConcurrentRequests =
-    candidate.maxConcurrentRequests ?? DEFAULT_MAX_CONCURRENT_REQUESTS;
-  if (!Number.isSafeInteger(maxConcurrentRequests) || maxConcurrentRequests <= 0) {
-    throw new Error("maxConcurrentRequests must be a positive safe integer");
-  }
-  if (
-    candidate.configurationSchema !== undefined &&
-    typeof candidate.configurationSchema !== "boolean" &&
-    (typeof candidate.configurationSchema !== "object" ||
-      candidate.configurationSchema === null ||
-      Array.isArray(candidate.configurationSchema))
-  ) {
-    throw new Error("configurationSchema must be a JSON Schema object or boolean");
-  }
-  return Object.freeze({
-    ...(candidate.config === undefined ? {} : { config: candidate.config }),
-    ...(candidate.dependencies === undefined
-      ? {}
-      : { dependencies: Object.freeze({ ...candidate.dependencies }) }),
-    ...(candidate.configurationSchema === undefined
-      ? {}
-      : { configurationSchema: candidate.configurationSchema }),
-    ...(candidate.decodeConfig === undefined
-      ? {}
-      : { decodeConfig: candidate.decodeConfig }),
-    providers: Object.freeze([...providers]),
-    ...(candidate.create === undefined ? {} : { create: candidate.create }),
-    ...(candidate.stop === undefined ? {} : { stop: candidate.stop }),
-    maxConcurrentRequests,
-  }) as AnyPluginDefinition;
-}
-
-type PluginOptionsInstance<
-  Config extends ConfigDeclaration<unknown> | undefined,
-  Dependencies extends DependencyDeclarations | undefined,
-> = import("./authoring.js").PluginInputs<Config, Dependencies>;
 
 function concreteProviders<Instance extends object>(
   providers: ReadonlyArray<PluginProvider<Instance>>,
@@ -965,39 +812,6 @@ function createDependencyClients(
     });
   }
   return Object.freeze(clients);
-}
-
-function validateDescriptor(descriptor: CapabilityProviderDescriptor): void {
-  if (
-    descriptor.capability_id.length === 0 ||
-    descriptor.descriptor_version.length === 0 ||
-    descriptor.operations.length === 0
-  ) {
-    throw new Error("Capability Provider descriptor is incomplete");
-  }
-  if (new Set(descriptor.operations).size !== descriptor.operations.length) {
-    throw new Error(
-      `Capability Provider ${descriptor.capability_id} declares duplicate Operations`,
-    );
-  }
-  if (
-    descriptor.descriptor_digest !== undefined &&
-    !/^sha256:[0-9a-f]{64}$/u.test(descriptor.descriptor_digest)
-  ) {
-    throw new Error(
-      `Capability Provider ${descriptor.capability_id} has an invalid descriptor digest`,
-    );
-  }
-  for (const operation of [
-    ...descriptor.stream_operations,
-    ...descriptor.event_operations,
-  ]) {
-    if (!descriptor.operations.includes(operation)) {
-      throw new Error(
-        `Capability Provider ${descriptor.capability_id} classifies unknown Operation ${operation}`,
-      );
-    }
-  }
 }
 
 function argument(arguments_: string[], name: string, fallback: string): string {
