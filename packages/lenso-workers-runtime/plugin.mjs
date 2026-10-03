@@ -12,6 +12,15 @@ function identity(descriptor) {
   ]);
 }
 
+function contractDescriptor(contract) {
+  if (contract.descriptor_digest !== undefined &&
+      contract.descriptor.descriptor_digest !== undefined &&
+      contract.descriptor_digest !== contract.descriptor.descriptor_digest) {
+    throw new Error("generated Capability declares conflicting Descriptor digests");
+  }
+  return { ...contract.descriptor, descriptor_digest: contract.descriptor_digest ?? contract.descriptor.descriptor_digest };
+}
+
 function requestOnly(descriptor, subject) {
   if (descriptor.stream_operations.length || descriptor.event_operations.length) {
     throw new Error(
@@ -87,7 +96,8 @@ export async function prepareWorkersRequestPlugin(definition, {
       const id = declaration.id ?? name;
       if (requirementIds.has(id)) throw new Error(`duplicate dependency ${id}`);
       requirementIds.add(id);
-      requestOnly(declaration.contract.descriptor, `dependency ${id}`);
+      const required = contractDescriptor(declaration.contract);
+      requestOnly(required, `dependency ${id}`);
       const routes = Object.hasOwn(dependencies, id) ? dependencies[id] : undefined;
       if (!Array.isArray(routes)) throw new Error(`Host must supply resolved routes for dependency ${id}`);
       if (declaration.cardinality === "one" && routes.length !== 1 ||
@@ -98,7 +108,7 @@ export async function prepareWorkersRequestPlugin(definition, {
       const providers = new Set();
       const bound = routes.map((route) => {
         if (!route.providerInstance || providers.has(route.providerInstance) ||
-            identity(route.descriptor) !== identity(declaration.contract.descriptor) ||
+            identity(route.descriptor) !== identity(required) ||
             typeof route.invokeRequest !== "function") {
           throw new Error(`resolved dependency route mismatch: ${id}`);
         }
@@ -134,7 +144,11 @@ export async function prepareWorkersRequestPlugin(definition, {
     active(lifecycle);
     for (const declaration of declarations) {
       const binding = declaration.bind(instance);
-      if (identity(binding.descriptor) !== identity(declaration.descriptor) ||
+      const boundDescriptor = {
+        ...binding.descriptor,
+        descriptor_digest: binding.descriptor.descriptor_digest ?? declaration.descriptor.descriptor_digest,
+      };
+      if (identity(boundDescriptor) !== identity(declaration.descriptor) ||
           typeof binding.invokeRequest !== "function") {
         throw new Error(`Capability binder mismatch: ${declaration.descriptor.capability_id}`);
       }

@@ -74,3 +74,33 @@ test("binder failure cleans the complete instance before leaving preparation", a
   await assert.rejects(prepareWorkersRequestPlugin(plugin, options()), /binder mismatch/);
   assert.equal(stopped, 1);
 });
+
+test("generated split Descriptor digest is checked for dependency admission", async () => {
+  const withoutDigest = { ...descriptor };
+  delete withoutDigest.descriptor_digest;
+  let created = 0;
+  const plugin = definition(async () => ({ kind: "success", value: 1 }), {
+    dependencies: { upstream: {
+      kind: "lenso.dependency", cardinality: "optional",
+      contract: {
+        descriptor: withoutDigest, descriptor_digest: descriptor.descriptor_digest,
+        createClient: invoke => invoke,
+      },
+    } },
+    create() { created++; return {}; },
+  });
+  await assert.rejects(prepareWorkersRequestPlugin(plugin, {
+    ...options(), dependencies: { upstream: [{
+      providerInstance: "source", descriptor: { ...descriptor, descriptor_digest: "sha256:" + "b".repeat(64) },
+      invokeRequest: async () => ({ kind: "success", value: 1 }),
+    }] },
+  }), /route mismatch/);
+  assert.equal(created, 0);
+  const prepared = await prepareWorkersRequestPlugin(plugin, {
+    ...options(), dependencies: { upstream: [{
+      providerInstance: "source", descriptor, invokeRequest: async () => ({ kind: "success", value: 1 }),
+    }] },
+  });
+  assert.equal(created, 1);
+  await prepared.stop(context());
+});

@@ -113,6 +113,7 @@ export interface ProviderDeclaration<Instance extends object> {
 export interface CapabilityProviderContract<Instance extends object> {
   readonly kind: "lenso.capability";
   readonly descriptor: CapabilityProviderDescriptor;
+  readonly descriptor_digest?: string;
   bindProvider(instance: Instance): CapabilityProviderBinding;
 }
 
@@ -282,9 +283,17 @@ export function definePlugin(
         ) {
           throw new Error("provides entries must be generated Capability contracts");
         }
+        if (contract.descriptor.descriptor_digest !== undefined &&
+            contract.descriptor_digest !== undefined &&
+            contract.descriptor.descriptor_digest !== contract.descriptor_digest) {
+          throw new Error("generated Capability declares conflicting Descriptor digests");
+        }
+        const descriptor = contract.descriptor_digest === undefined
+          ? contract.descriptor
+          : Object.freeze({ ...contract.descriptor, descriptor_digest: contract.descriptor_digest });
         return Object.freeze({
           kind: "lenso.provider" as const,
-          descriptor: contract.descriptor,
+          descriptor,
           bind: (instance: object) => contract.bindProvider(instance),
         });
       });
