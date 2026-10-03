@@ -55,10 +55,11 @@ export type ProviderStreamReceiveOutcome =
   | { readonly kind: "runtime"; readonly failure: RuntimeFailure };
 /** @internal Adapter lowering seam. Authors use generated Stream Provider types. */
 export interface ProviderStreamSessionBinding {
+  readonly closed?: Promise<void>;
   send(message: unknown): Promise<ProviderStreamActionOutcome>;
   receive(): Promise<ProviderStreamReceiveOutcome>;
   closeSend(): Promise<ProviderStreamActionOutcome>;
-  cancel(): void;
+  cancel(): void | Promise<void>;
 }
 export type ProviderStreamOpenOutcome =
   | { readonly kind: "opened"; readonly stream: ProviderStreamSessionBinding }

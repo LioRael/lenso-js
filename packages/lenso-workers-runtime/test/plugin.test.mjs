@@ -17,6 +17,12 @@ const definition = (invokeRequest, extra = {}) => ({
 });
 const options = () => ({ providedEndpoints: [descriptor], lifecycle: context() });
 
+test("Request-only preparation retains request capacity above Stream bound", async () => {
+  const instance = await prepareWorkersRequestPlugin(definition(async () => ({ kind: "success", value: 1 }), { maxConcurrentRequests: 64 }), options());
+  assert.equal((await instance.invokeRequest(descriptor.capability_id, "echo", context(), {})).kind, "success");
+  await instance.stop(context());
+});
+
 test("Request projection forwards the exact Host-bound dependency context", async () => {
   let received;
   const plugin = definition(async (_op, call, payload, instance) => instance.client(call, payload), {

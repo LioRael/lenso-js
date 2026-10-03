@@ -106,6 +106,7 @@ export function configuration<Config>(
 export interface ProviderDeclaration<Instance extends object> {
   readonly kind: "lenso.provider";
   readonly descriptor: CapabilityProviderDescriptor;
+  readonly streamLifecycleProfile?: string;
   readonly bind: (instance: Instance) => CapabilityProviderBinding;
 }
 
@@ -114,6 +115,7 @@ export interface CapabilityProviderContract<Instance extends object> {
   readonly kind: "lenso.capability";
   readonly descriptor: CapabilityProviderDescriptor;
   readonly descriptor_digest?: string;
+  readonly streamLifecycleProfile?: string;
   bindProvider(instance: Instance): CapabilityProviderBinding;
 }
 
@@ -294,6 +296,7 @@ export function definePlugin(
         return Object.freeze({
           kind: "lenso.provider" as const,
           descriptor,
+          ...(contract.streamLifecycleProfile === undefined ? {} : { streamLifecycleProfile: contract.streamLifecycleProfile }),
           bind: (instance: object) => contract.bindProvider(instance),
         });
       });

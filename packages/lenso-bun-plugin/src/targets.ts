@@ -2,6 +2,8 @@ import { dirname, resolve } from "node:path";
 import { mkdir } from "node:fs/promises";
 import ts from "typescript-parser";
 import { builtinModules } from "node:module";
+import { lowerGeneratedStreamModule } from "./stream-lowering.js";
+import type { BunPlugin } from "bun";
 
 export type PluginTarget = "native-bun" | "workers-js";
 
@@ -40,28 +42,9 @@ export async function buildPluginTarget(options: {
           loader: "js",
           resolveDir: dirname(entrypoint),
         }));
-        if (native) return;
-        builder.onResolve({ filter: /.*/ }, ({ path, importer }) => {
-          if (path.startsWith("node:") || path.startsWith("bun:") ||
-              builtinModules.includes(path) || ["@lenso/bun", "@lenso/bun-plugin"].includes(path)) {
-            const message = `${importer}: workers-js cannot import ${path}; use @lenso/bun-plugin/authoring for declarations and explicit target facilities`;
-            diagnostics.push(message);
-            throw new Error(message);
-          }
-        });
-        builder.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, async ({ path }) => {
-          const contents = await Bun.file(path).text();
-          try {
-            assertWorkersSource(path, contents);
-          } catch (error) {
-            diagnostics.push(String(error));
-            throw error;
-          }
-          const extension = path.split(".").at(-1)!;
-          return { contents, loader: extension.endsWith("tsx") ? "tsx" : extension.includes("ts") ? "ts" : "js" };
-        });
+
       },
-    }],
+    }, createPluginTargetBuildPlugin(options.target, diagnostics)],
   }).catch((error: unknown) => {
     throw new Error(`Plugin target ${options.target} build failed:\n${diagnostics.join("\n") || String(error)}`);
   });
@@ -71,6 +54,37 @@ export async function buildPluginTarget(options: {
   if (result.outputs.length !== 1) throw new Error("Plugin target requires one bundled ES module");
   await mkdir(dirname(resolve(options.outfile)), { recursive: true });
   await Bun.write(resolve(options.outfile), result.outputs[0]!);
+}
+
+/** Target packaging hook for the existing Core declaration compiler. */
+export function createPluginTargetBuildPlugin(target: PluginTarget, diagnostics: string[] = []): BunPlugin {
+  if (target !== "native-bun" && target !== "workers-js") throw new Error(`unsupported Plugin target: ${String(target)}`);
+  const native = target === "native-bun";
+  return {
+    name: "lenso-plugin-target-packaging",
+    setup(builder) {
+        if (!native) builder.onResolve({ filter: /.*/ }, ({ path, importer }) => {
+          if (path.startsWith("node:") || path.startsWith("bun:") ||
+              builtinModules.includes(path) || ["@lenso/bun", "@lenso/bun-plugin"].includes(path)) {
+            const message = `${importer}: workers-js cannot import ${path}; use @lenso/bun-plugin/authoring for declarations and explicit target facilities`;
+            diagnostics.push(message);
+            throw new Error(message);
+          }
+        });
+        builder.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, async ({ path }) => {
+          let contents = await Bun.file(path).text();
+          try {
+            contents = lowerGeneratedStreamModule(path, contents);
+            if (!native) assertWorkersSource(path, contents);
+          } catch (error) {
+            diagnostics.push(String(error));
+            throw error;
+          }
+          const extension = path.split(".").at(-1)!;
+          return { contents, loader: extension.endsWith("tsx") ? "tsx" : extension.includes("ts") ? "ts" : "js" };
+        });
+    },
+  };
 }
 
 function assertWorkersSource(path: string, contents: string): void {

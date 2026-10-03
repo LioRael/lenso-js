@@ -70,11 +70,15 @@ export type StreamEvent<Message, DomainError> =
     };
 
 export interface StreamSession<Message, DomainError> {
+  /** Optional physical cleanup proof carried by generated target lowerings. */
+  readonly closed?: Promise<void>;
   send(message: Message): Promise<void>;
   receive(): Promise<StreamEvent<Message, DomainError>>;
   closeSend(): Promise<void>;
-  cancel(): void;
+  cancel(): void | Promise<void>;
 }
+
+export { lowerProviderStreamWithCleanup } from "./stream.js";
 
 export type EventAdmission = "accepted" | "unavailable" | "exhausted";
 

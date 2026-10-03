@@ -51,10 +51,11 @@ yet a `lenso app build --target workers` integration or Rust Kernel proof**.
 Core assembly must connect this interface to its admitted Plan endpoints/routes,
 invoke it in the owning Workers event/generation and own uncertain cleanup.
 Existing linked Rust/Wasm Workers and Workers HTTP streaming stay unchanged.
-The generic TS Workers slice admits **Request only**: Stream/Event fail before
-instance construction with a diagnostic. Their missing prerequisite is a
-Kernel-connected JS session adapter with bounded physical terminal/cancellation
-cleanup evidence; no Bun process API is polyfilled into Workers.
+`prepareWorkersRequestPlugin` deliberately retains **Request only** admission.
+The additive `prepareWorkersPlugin` supports the explicitly bounded generated
+server-output Stream slice in [the Stream fixture](../source-first-stream/README.md).
+Event still fails before instance construction. Full Kernel-connected application
+assembly remains a separate integration; no Bun process API is polyfilled into Workers.
 
 Local baseline: JS `f0ea1bd4254dfecd68dbbe7a4c108e7ef81e3e2a`, Core inspected
 at `20a2f5fe184c8e1f174d38348f837bc3ea008565`. This slice changes no Core files.

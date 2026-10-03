@@ -1,5 +1,6 @@
 // A JS execution projection, not a resolver or an application runtime.
 // The Host supplies already admitted endpoints and Plan-bound call functions.
+import { createPluginStreamSession } from "./plugin-stream.mjs";
 const fail = (kind, detail) => ({ kind: "runtime", failure: { kind, detail } });
 
 function identity(descriptor) {
@@ -21,10 +22,11 @@ function contractDescriptor(contract) {
   return { ...contract.descriptor, descriptor_digest: contract.descriptor_digest ?? contract.descriptor.descriptor_digest };
 }
 
-function requestOnly(descriptor, subject) {
-  if (descriptor.stream_operations.length || descriptor.event_operations.length) {
+function supported(descriptor, subject, profile, allowStreams) {
+  if (descriptor.event_operations.length ||
+      descriptor.stream_operations.length && (!allowStreams || profile !== "lenso.provider-stream-cleanup@1")) {
     throw new Error(
-      `workers-js Request slice rejects ${subject}: Stream/Event require a Kernel-connected JS session adapter with terminal cleanup evidence; select Native Bun V2 for those interactions`,
+      `workers-js ${allowStreams ? "Request/Stream" : "Request"} slice rejects ${subject}: Event is unsupported; Stream requires the generated physical cleanup target lowering`,
     );
   }
 }
@@ -56,7 +58,23 @@ export async function prepareWorkersRequestPlugin(definition, {
   configuration,
   lifecycle,
 } = {}) {
+  return prepareWorkersPluginInternal(definition, { providedEndpoints, dependencies, configuration, lifecycle }, false);
+}
+
+/** Request/Stream JS Host projection; Event remains rejected before create. */
+export async function prepareWorkersPlugin(definition, options = {}) {
+  return prepareWorkersPluginInternal(definition, options, true);
+}
+
+async function prepareWorkersPluginInternal(definition, {
+  providedEndpoints, dependencies = {}, configuration, lifecycle,
+  maxOpenStreams = Math.min(definition.maxConcurrentRequests, 32), maxStreamMessageBytes = 65536,
+}, allowStreams) {
   active(lifecycle);
+  if (!Number.isSafeInteger(maxOpenStreams) || maxOpenStreams < 1 || maxOpenStreams > 32 ||
+      !Number.isSafeInteger(maxStreamMessageBytes) || maxStreamMessageBytes < 1 || maxStreamMessageBytes > 16777216) {
+    throw new Error("invalid Workers Stream session/message capacity");
+  }
   if (!Array.isArray(providedEndpoints)) {
     throw new TypeError("Host must supply the exact admitted providedEndpoints");
   }
@@ -67,7 +85,7 @@ export async function prepareWorkersRequestPlugin(definition, {
     if (declaration.kind !== "lenso.provider" || typeof declaration.bind !== "function") {
       throw new Error("workers-js requires source-first instance-bound Capability declarations");
     }
-    requestOnly(declaration.descriptor, declaration.descriptor.capability_id);
+    supported(declaration.descriptor, declaration.descriptor.capability_id, declaration.streamLifecycleProfile, allowStreams);
     const key = declaration.descriptor.capability_id;
     if (declared.has(key)) throw new Error(`duplicate Capability ${key}`);
     declared.set(key, declaration);
@@ -97,7 +115,7 @@ export async function prepareWorkersRequestPlugin(definition, {
       if (requirementIds.has(id)) throw new Error(`duplicate dependency ${id}`);
       requirementIds.add(id);
       const required = contractDescriptor(declaration.contract);
-      requestOnly(required, `dependency ${id}`);
+      supported(required, `dependency ${id}`, declaration.contract.streamLifecycleProfile, allowStreams);
       const routes = Object.hasOwn(dependencies, id) ? dependencies[id] : undefined;
       if (!Array.isArray(routes)) throw new Error(`Host must supply resolved routes for dependency ${id}`);
       if (declaration.cardinality === "one" && routes.length !== 1 ||
@@ -109,7 +127,8 @@ export async function prepareWorkersRequestPlugin(definition, {
       const bound = routes.map((route) => {
         if (!route.providerInstance || providers.has(route.providerInstance) ||
             identity(route.descriptor) !== identity(required) ||
-            typeof route.invokeRequest !== "function") {
+            typeof route.invokeRequest !== "function" ||
+            required.stream_operations.length && typeof route.openStream !== "function") {
           throw new Error(`resolved dependency route mismatch: ${id}`);
         }
         providers.add(route.providerInstance);
@@ -117,7 +136,10 @@ export async function prepareWorkersRequestPlugin(definition, {
           (operation, context, payload) => route.invokeRequest(operation, context, payload),
           {
             providerInstance: route.providerInstance,
-            openStream: async () => fail("unavailable", "workers-js Request slice does not admit Stream"),
+            openStream: (operation, context, payload) => {
+              if (!required.stream_operations.includes(operation)) return Promise.resolve(fail("unknown_operation", operation));
+              return route.openStream(operation, context, payload);
+            },
             publishEvent: async () => fail("unavailable", "workers-js Request slice does not admit Event"),
           },
         );
@@ -158,10 +180,11 @@ export async function prepareWorkersRequestPlugin(definition, {
     await definition.stop?.(instance, lifecycle);
     throw error;
   }
-  let pending = 0, stopping = false;
+  let pending = 0, stopping = false, cleanupUnconfirmed = false, opening = 0;
+  const sessions = new Set();
   return Object.freeze({
     async invokeRequest(capability, operation, context, payload) {
-      if (stopping) return fail("admission_closed", "Plugin is stopping");
+      if (stopping || cleanupUnconfirmed) return fail("admission_closed", "Plugin is stopping or Stream cleanup is unconfirmed");
       if (context.cancelled) return fail("cancelled", "Host invocation scope cancelled");
       const binding = bindings.get(capability);
       if (!binding?.descriptor.operations.includes(operation)) {
@@ -178,10 +201,58 @@ export async function prepareWorkersRequestPlugin(definition, {
         pending--;
       }
     },
+    async openStream(capability, operation, context, payload) {
+      if (stopping || cleanupUnconfirmed) return fail("admission_closed", "Plugin generation unavailable");
+      if (context.cancelled || context.signal?.aborted) return fail("cancelled", "Host Stream scope cancelled");
+      const binding = bindings.get(capability);
+      if (!allowStreams || !binding?.descriptor.stream_operations.includes(operation) || !binding.openStream) {
+        return fail("unknown_operation", operation);
+      }
+      if (sessions.size + opening >= maxOpenStreams) return fail("resource_exhausted", operation);
+      opening++;
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      context.signal?.addEventListener("abort", abort, { once: true });
+      const call = Object.freeze({
+        ...context,
+        get cancelled() { return context.cancelled || controller.signal.aborted; },
+        signal: controller.signal,
+        abort,
+      });
+      let retained = false;
+      try {
+        const result = await binding.openStream(operation, call, payload, instance);
+        if (result.kind !== "opened") return result;
+        let session;
+        try {
+          session = createPluginStreamSession(result.stream, call, {
+            maxMessageBytes: maxStreamMessageBytes,
+            onRelease() { sessions.delete(session); context.signal?.removeEventListener("abort", abort); },
+            onUnconfirmed() { cleanupUnconfirmed = true; },
+          });
+        } catch (error) {
+          cleanupUnconfirmed = true;
+          try { await result.stream.cancel(); } catch {}
+          return fail("unavailable", String(error));
+        }
+        sessions.add(session);
+        retained = true;
+        if (call.cancelled) {
+          await session.cancel();
+          return fail("cancelled", "Host Stream open cancelled");
+        }
+        return { kind: "opened", stream: session };
+      } catch (error) {
+        return fail("plugin_failure", String(error));
+      } finally {
+        opening--;
+        if (!retained) context.signal?.removeEventListener("abort", abort);
+      }
+    },
     async stop(context) {
       active(context);
       if (stopping) throw new Error("Plugin stop attempted more than once");
-      if (pending) throw new Error("Plugin stop requires physically settled requests");
+      if (pending || opening || sessions.size || cleanupUnconfirmed) throw new Error("Plugin stop requires physically settled requests and Stream cleanup");
       stopping = true;
       await definition.stop?.(instance, context);
       active(context);

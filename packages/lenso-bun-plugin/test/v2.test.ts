@@ -13,6 +13,7 @@ import {
 import { BUN_AUTHORING_CALLBACK_PROOF_HEADER } from "../src/v2.ts";
 import { buildPluginTarget } from "../src/targets.ts";
 import { CAPABILITY_ID as PROFILE_ID, DESCRIPTOR_DIGEST as PROFILE_DIGEST } from "./fixtures/generated/profile.ts";
+import { CAPABILITY_ID as CONVERSATION_ID, DESCRIPTOR_DIGEST as CONVERSATION_DIGEST } from "./fixtures/generated/conversation.ts";
 
 const fixture = new URL("./fixtures/v2-child.ts", import.meta.url).pathname;
 const blockingFixture = new URL("./fixtures/v2-blocking-child.ts", import.meta.url).pathname;
@@ -115,6 +116,133 @@ test("same portable plugin.ts runs as two real Bun V2 instances with a typed dep
       await child.process.exited;
     }
     server.stop();
+  }
+});
+
+test("same source Request/Stream runs on real Bun with pull, half-close and physical cascade cancellation", async () => {
+  const root = new URL("../../../fixtures/source-first-stream/", import.meta.url).pathname;
+  const script = root + "dist/native.js";
+  await buildPluginTarget({ entrypoint: root + "plugin.ts", outfile: script, target: "native-bun" });
+  for (const mode of ["complete", "cancel", "domain"]) {
+    const session = randomValue(), secret = randomValue();
+    let providerOrigin = "", correlation = 1000;
+    const children: Awaited<ReturnType<typeof startChild>>[] = [];
+    const server = Bun.serve({
+      hostname: "127.0.0.1", port: 0,
+      async fetch(request) {
+        const message = await request.json() as { id: string; method: any; params: any };
+        const signature = await proof(secret, authoringCallbackProofMessage(session, message.method, message.params));
+        if (!timingSafeEqual(
+          decodeBase64Url32(request.headers.get(BUN_AUTHORING_CALLBACK_PROOF_HEADER) ?? ""),
+          decodeBase64Url32(signature),
+        )) return new Response(null, { status: 401 });
+        let result: any = {};
+        if (message.method !== "lenso.settled") {
+          if (message.method === "lenso.stream.open") {
+            expect(message.params.route_id).toBe("upstream-a");
+            result = await rpc(providerOrigin, message.method, {
+              session, correlation_id: String(correlation++), endpoint_id: "conversation",
+              capability_id: CONVERSATION_ID, descriptor_version: VERSION, descriptor_digest: CONVERSATION_DIGEST,
+              operation: "chat", scope: message.params.scope, request: message.params.request,
+            });
+          } else {
+            result = await rpc(providerOrigin, message.method, {
+              ...message.params, correlation_id: String(correlation++),
+            });
+          }
+          result.correlation_id = message.params.correlation_id;
+        }
+        return Response.json({ jsonrpc: "2.0", id: message.id, result });
+      },
+    });
+    const origin = `http://127.0.0.1:${server.port}/`;
+    const scope = () => ({
+      scope_id: "stream-" + correlation, parent_scope_id: null,
+      remaining_budget_nanos: "5000000000", permissions: [], extensions: [],
+    });
+    const call = (origin: string, method: string, values: object) => rpc(origin, method, {
+      session, correlation_id: String(correlation++), ...values,
+    });
+    try {
+      for (const prefix of ["provider-a", "consumer-b"]) {
+        const child = await startChild(script, secret, origin);
+        children.push(child);
+        if (prefix === "provider-a") providerOrigin = child.origin;
+        await initializeChild(child.origin, secret, origin, {
+          api_version: 2, identity: identity(session, prefix), config: { prefix },
+          required_declarations: [{
+            requirement_id: "upstream", capability_id: CONVERSATION_ID,
+            descriptor_version: VERSION, descriptor_digest: CONVERSATION_DIGEST, cardinality: "optional",
+          }],
+          routes: prefix === "consumer-b" ? [{
+            route_id: "upstream-a", requirement_id: "upstream", capability_id: CONVERSATION_ID,
+            descriptor_version: VERSION, descriptor_digest: CONVERSATION_DIGEST,
+            provider_instance: "provider-a", provider_order: 0,
+          }] : [],
+          provided_endpoints: [{
+            endpoint_id: "conversation", capability_id: CONVERSATION_ID,
+            descriptor_version: VERSION, descriptor_digest: CONVERSATION_DIGEST,
+          }, {
+            endpoint_id: "profile", capability_id: PROFILE_ID,
+            descriptor_version: VERSION, descriptor_digest: PROFILE_DIGEST,
+          }],
+          limits: limits(2),
+        });
+        await rpc(child.origin, "lenso.construct", {
+          session, lifecycle_scope_id: "create-" + prefix, remaining_budget_nanos: "1000000000",
+        });
+      }
+      const consumer = children[1]!.origin;
+      const stats = async (origin: string) => (await call(origin, "lenso.invoke", {
+        endpoint_id: "profile", capability_id: PROFILE_ID, descriptor_version: VERSION, descriptor_digest: PROFILE_DIGEST,
+        operation: "corpus_round_trip", scope: scope(), payload: { value: {} },
+      })).outcome.value.value;
+      const opened = await call(mode === "domain" ? providerOrigin : consumer, "lenso.stream.open", {
+        endpoint_id: "conversation", capability_id: CONVERSATION_ID, descriptor_version: VERSION, descriptor_digest: CONVERSATION_DIGEST,
+        operation: "chat", scope: scope(), request: { room: mode === "cancel" ? "blocked" : mode === "domain" ? "closed" : "general" },
+      });
+      if (mode === "domain") {
+        expect(opened.outcome).toEqual({ kind: "domain", error: "room_closed" });
+      } else {
+        expect(opened.outcome.kind).toBe("opened");
+        const stream_id = opened.outcome.stream_id;
+        expect(await stats(providerOrigin)).toEqual({ produced: 0, cleaned: 0 });
+        expect(await stats(consumer)).toEqual({ produced: 0, cleaned: 0 });
+        expect((await call(consumer, "lenso.stream.receive", { stream_id })).outcome).toMatchObject({
+          kind: "message", sequence: "0", message: { text: "consumer-b: provider-a: 0" },
+        });
+        expect(await stats(providerOrigin)).toEqual({ produced: 1, cleaned: 0 });
+        expect(await stats(consumer)).toEqual({ produced: 1, cleaned: 0 });
+        expect((await call(consumer, "lenso.stream.close_send", { stream_id })).outcome).toEqual({ kind: "accepted" });
+        if (mode === "complete") {
+          for (const index of [1, 2]) {
+            expect((await call(consumer, "lenso.stream.receive", { stream_id })).outcome).toMatchObject({
+              kind: "message", sequence: String(index), message: { text: `consumer-b: provider-a: ${index}` },
+            });
+          }
+          expect((await call(consumer, "lenso.stream.receive", { stream_id })).outcome).toEqual({ kind: "terminal", outcome: { kind: "success" } });
+        } else {
+          const pending = call(consumer, "lenso.stream.receive", { stream_id });
+          await new Promise(resolve => setTimeout(resolve, 2));
+          const cancellation = call(consumer, "lenso.stream.cancel", { stream_id });
+          expect(await stats(consumer)).toEqual({ produced: 1, cleaned: 0 });
+          expect((await pending).outcome).toMatchObject({ kind: "runtime", failure: { kind: "cancelled" } });
+          expect((await cancellation).outcome).toEqual({ kind: "accepted" });
+        }
+        expect(await stats(providerOrigin)).toEqual({ produced: mode === "complete" ? 3 : 1, cleaned: 1 });
+        expect(await stats(consumer)).toEqual({ produced: mode === "complete" ? 3 : 1, cleaned: 1 });
+      }
+      for (const child of [...children].reverse()) {
+        await rpc(child.origin, "lenso.stop", { session, cleanup_scope_id: "cleanup-" + correlation++, remaining_budget_nanos: "1000000000" });
+        expect(await child.process.exited).toBe(0);
+      }
+    } finally {
+      for (const child of children) {
+        if (child.process.exitCode === null) child.process.kill();
+        await child.process.exited;
+      }
+      server.stop();
+    }
   }
 });
 

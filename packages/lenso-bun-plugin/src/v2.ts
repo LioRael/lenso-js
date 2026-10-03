@@ -146,7 +146,7 @@ class BunAuthoringServer<
 > {
   readonly #active = new Map<string, ActiveInvocation | ActiveStreamOpen>();
   readonly #streams = new Map<string, ActiveStream>();
-  readonly #outboundStreams = new Map<string, () => void>();
+  readonly #outboundStreams = new Map<string, () => void | Promise<void>>();
   readonly #contexts = new WeakMap<InvocationContext, ActiveContext>();
   readonly #retired = new Set<string>();
   readonly #bootstrapSecret: Uint8Array;
@@ -543,7 +543,7 @@ class BunAuthoringServer<
         this.#instance,
       );
       if (result.kind === "opened" && controller.signal.aborted) {
-        result.stream.cancel();
+        await result.stream.cancel();
         outcome = {
           kind: "runtime",
           failure: { kind: "cancelled", request_id: params.correlation_id },
@@ -594,6 +594,12 @@ class BunAuthoringServer<
       outcome = { kind: "runtime", failure: { kind: "protocol_violation", capability: "lenso.bun-authoring" } };
     } else {
       const result = await stream.binding.receive();
+      if (stream.context.cancelled) {
+        return {
+          session: params.session, correlation_id: params.correlation_id, stream_id: params.stream_id,
+          outcome: { kind: "runtime", failure: { kind: "cancelled", request_id: params.correlation_id } },
+        };
+      }
       switch (result.kind) {
         case "message": outcome = { kind: "message", sequence: (stream.nextReceiveSequence++).toString(), message: result.value }; break;
         case "peer_half_closed": outcome = { kind: "peer_half_closed" }; break;
@@ -621,7 +627,11 @@ class BunAuthoringServer<
     const initialize = this.#requireInitialize();
     validateStreamAction(params, initialize.identity, "stream_cancel");
     const stream = this.#streams.get(params.stream_id);
-    stream?.binding.cancel();
+    if (stream !== undefined) {
+      this.#contexts.get(stream.context)?.controller.abort("Stream cancelled");
+      await stream.binding.cancel();
+      if (stream.binding.closed) await stream.binding.closed;
+    }
     if (stream !== undefined) this.#contexts.delete(stream.context);
     this.#streams.delete(params.stream_id);
     return { session: params.session, correlation_id: params.correlation_id, stream_id: params.stream_id, outcome: { kind: "accepted" } };
@@ -732,8 +742,11 @@ class BunAuthoringServer<
       const streamId = result.outcome.stream_id;
       let nextSendSequence = 0n;
       let closed = false;
+      let cancellation: Promise<void> | undefined;
+      let onParentAbort: (() => void) | undefined;
       const finish = () => {
         closed = true;
+        if (onParentAbort) parent.controller.signal.removeEventListener("abort", onParentAbort);
         this.#outboundStreams.delete(streamId);
       };
       const action = async (
@@ -804,17 +817,28 @@ class BunAuthoringServer<
           });
         },
         cancel: () => {
+          if (cancellation) return cancellation;
           if (closed) return;
-          finish();
+          closed = true;
           const actionId = (this.#nextOutboundId++).toString();
-          void this.#callback("lenso.stream.cancel", {
+          cancellation = this.#callback("lenso.stream.cancel", {
             session: initialize.identity.session,
             correlation_id: actionId,
             stream_id: streamId,
-          } satisfies StreamReceiveParams).catch(() => undefined);
+          } satisfies StreamReceiveParams).then(value => {
+            const result = value as StreamActionResult;
+            validateStreamResultFor(result, initialize.identity, actionId, streamId, "stream_action_result");
+            if (result.outcome.kind !== "accepted") throw new Error("Bun dependency Stream cleanup unconfirmed");
+            finish();
+          });
+          void cancellation.catch(() => undefined);
+          return cancellation;
         },
       };
       this.#outboundStreams.set(streamId, binding.cancel);
+      onParentAbort = () => { void binding.cancel(); };
+      parent.controller.signal.addEventListener("abort", onParentAbort, { once: true });
+      if (parent.controller.signal.aborted) onParentAbort();
       return { kind: "opened", stream: binding };
     } finally {
       this.#activeOutboundCalls -= 1;
@@ -843,10 +867,12 @@ class BunAuthoringServer<
     if (this.#active.size > 0 || this.#activeOutboundCalls > 0) {
       throw new Error("Bun Plugin stopped with unfinished work");
     }
-    for (const cancel of this.#outboundStreams.values()) cancel();
+    for (const cancel of this.#outboundStreams.values()) await cancel();
     this.#outboundStreams.clear();
     for (const stream of this.#streams.values()) {
-      stream.binding.cancel();
+      this.#contexts.get(stream.context)?.controller.abort("Plugin stopping");
+      await stream.binding.cancel();
+      if (stream.binding.closed) await stream.binding.closed;
       this.#contexts.delete(stream.context);
     }
     this.#streams.clear();

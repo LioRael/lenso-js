@@ -22,7 +22,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node --check index.mjs && node --check facilities.mjs && node --check host.mjs && node --check http.mjs && node --check runner.mjs && node --check scope.mjs && node --check clock.mjs && node --check component-admission.mjs && node --check component-requests.mjs && node --check knowledge-settings-local.mjs && node --check plugin.mjs && node --check build.mjs",
+    "build": "node --check index.mjs && node --check facilities.mjs && node --check host.mjs && node --check http.mjs && node --check runner.mjs && node --check scope.mjs && node --check clock.mjs && node --check component-admission.mjs && node --check component-requests.mjs && node --check knowledge-settings-local.mjs && node --check plugin.mjs && node --check plugin-stream.mjs && node --check build.mjs",
     "prepack": "npm run build",
     "smoke": "node --test test/package.test.mjs",
     "test": "node --test test/*.test.mjs"
