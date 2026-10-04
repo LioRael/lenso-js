@@ -40,6 +40,8 @@ jobs:
           python3 fixtures/source-first-stream/run.py --workerd fixtures/source-first-request/tooling/node_modules/@cloudflare/workerd-linux-64/bin/workerd --output /tmp/lenso-source-first-stream-workerd.json
       - name: Run isolated packed facility consumer
         run: node fixtures/workers-http-parity/packed-facilities.mjs /tmp/lenso-packed-facilities.json
+      - name: Run isolated packed authoring consumer
+        run: node fixtures/source-first-request/packed-authoring.mjs /tmp/lenso-packed-authoring.json
       - run: bun run package-smoke
       - run: npm pack --dry-run ./packages/lenso-bun
       - run: npm pack --dry-run ./packages/lenso-bun-plugin

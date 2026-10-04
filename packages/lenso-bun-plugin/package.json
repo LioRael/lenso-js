@@ -1,6 +1,6 @@
 {
   "name": "@lenso/bun-plugin",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Bun Plugin runtime for Lenso generated Capability providers.",
   "type": "module",
   "license": "MIT",
@@ -52,7 +52,7 @@
     "test": "bun test test"
   },
   "dependencies": {
-    "@lenso/contract-runtime": "0.3.1",
+    "@lenso/contract-runtime": "0.3.2",
     "@lenso/process-protocol": "0.2.4",
     "typescript": "7.0.2",
     "typescript-parser": "npm:typescript@5.9.3"

@@ -1,6 +1,6 @@
 {
   "name": "@lenso/contract-runtime",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Runtime-neutral TypeScript wire support for generated Lenso Capability contracts.",
   "type": "module",
   "license": "MIT",
@@ -39,6 +39,9 @@
     "prepack": "bun run build",
     "smoke": "node test/package-esm.mjs && node test/package-cjs.cjs",
     "test": "bun test test"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
   },
   "publishConfig": {
     "access": "public",

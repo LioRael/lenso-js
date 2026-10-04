@@ -25,4 +25,5 @@ test("published pure authoring entry loads independently of Bun transport", asyn
   expect(authoring.configuration).toBeFunction();
   const targets = await import("@lenso/bun-plugin/targets");
   expect(targets.buildPluginTarget).toBeFunction();
+  expect(targets.createPluginTargetBuildPlugin).toBeFunction();
 });
