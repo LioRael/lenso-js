@@ -125,6 +125,7 @@ export interface LegacyPluginOptions<
   Config,
   Instance,
 > {
+  readonly metadata?: import("./authoring.js").PluginMetadata;
   readonly providers: ReadonlyArray<CapabilityProviderBinding<Instance>>;
   readonly dependencies?: Dependencies;
   readonly configurationSchema?: boolean | Readonly<Record<string, unknown>>;
@@ -141,6 +142,7 @@ export interface LegacyPluginDefinition<
   Config,
   Instance,
 > {
+  readonly metadata?: import("./authoring.js").PluginMetadata;
   readonly providers: ReadonlyArray<CapabilityProviderBinding<Instance>>;
   readonly dependencies: Dependencies;
   readonly configurationSchema: boolean | Readonly<Record<string, unknown>> | undefined;

@@ -29,10 +29,11 @@ const STORE_DIGEST =
 const SYNC_DIGEST =
   "sha256:2200000000000000000000000000000000000000000000000000000000000022";
 
-test("same portable plugin.ts runs as two real Bun V2 instances with a typed dependency", async () => {
-  const root = new URL("../../../fixtures/source-first-request/", import.meta.url).pathname;
+for (const [directory, exportName] of [["source-first-request", "default"], ["source-inventory", "greeting"]] as const) {
+test(`${directory} selected Plugin runs as two real Bun V2 instances with a typed dependency`, async () => {
+  const root = new URL(`../../../fixtures/${directory}/`, import.meta.url).pathname;
   const script = root + "dist/native.js";
-  await buildPluginTarget({ entrypoint: root + "plugin.ts", outfile: script, target: "native-bun" });
+  await buildPluginTarget({ entrypoint: root + "plugin.ts", exportName, outfile: script, target: "native-bun" });
   const secret = randomValue(), session = randomValue();
   const children: Awaited<ReturnType<typeof startChild>>[] = [];
   let providerOrigin = "", nextRequest = 100;
@@ -118,6 +119,8 @@ test("same portable plugin.ts runs as two real Bun V2 instances with a typed dep
     server.stop();
   }
 });
+
+}
 
 test("same source Request/Stream runs on real Bun with pull, half-close and physical cascade cancellation", async () => {
   const root = new URL("../../../fixtures/source-first-stream/", import.meta.url).pathname;

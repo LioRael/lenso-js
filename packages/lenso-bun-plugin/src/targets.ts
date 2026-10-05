@@ -14,6 +14,7 @@ export type PluginTarget = "native-bun" | "workers-js";
  */
 export async function buildPluginTarget(options: {
   readonly entrypoint: string;
+  readonly exportName?: string;
   readonly outfile: string;
   readonly target: PluginTarget;
 }): Promise<void> {
@@ -21,6 +22,9 @@ export async function buildPluginTarget(options: {
     throw new Error(`unsupported Plugin target: ${String(options.target)}`);
   }
   const entrypoint = resolve(options.entrypoint);
+  const exportName = options.exportName ?? "default";
+  if (typeof exportName !== "string" || exportName.length === 0) throw new Error("Plugin exportName must be a nonempty string");
+  const imported = `import { ${JSON.stringify(exportName)} as definition } from ${JSON.stringify(entrypoint)};`;
   const native = options.target === "native-bun";
   const entry = "lenso-target-entry";
   const diagnostics: string[] = [];
@@ -37,8 +41,8 @@ export async function buildPluginTarget(options: {
         }));
         builder.onLoad({ filter: /.*/, namespace: entry }, () => ({
           contents: native
-            ? `import definition from ${JSON.stringify(entrypoint)}; import { servePluginV2 } from "@lenso/bun-plugin"; await servePluginV2(definition);`
-            : `export { default } from ${JSON.stringify(entrypoint)};`,
+            ? `${imported} import { servePluginV2 } from "@lenso/bun-plugin"; await servePluginV2(definition);`
+            : `${imported} export default definition;`,
           loader: "js",
           resolveDir: dirname(entrypoint),
         }));
@@ -46,7 +50,7 @@ export async function buildPluginTarget(options: {
       },
     }, createPluginTargetBuildPlugin(options.target, diagnostics)],
   }).catch((error: unknown) => {
-    throw new Error(`Plugin target ${options.target} build failed:\n${diagnostics.join("\n") || String(error)}`);
+    throw new Error(`Plugin target ${options.target} build failed:\n${diagnostics.join("\n") || (error instanceof AggregateError ? error.errors.map(String).join("\n") : String(error))}`);
   });
   if (!result.success) {
     throw new Error(`Plugin target ${options.target} build failed:\n${result.logs.map(String).join("\n")}`);

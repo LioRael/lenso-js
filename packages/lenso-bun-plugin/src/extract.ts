@@ -1,4 +1,7 @@
-import { dirname } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
+import { lstatSync, realpathSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { validatePluginMetadata, type PluginMetadata } from "./authoring.js";
 import * as ts from "typescript/unstable/ast";
 import {
   API,
@@ -43,11 +46,13 @@ export type SymbolMeaning =
 
 export interface ExtractionOptions {
   readonly entryFile: string;
+  readonly exportName?: string;
   readonly classifySymbol: (origin: SymbolOrigin) => SymbolMeaning | undefined;
 }
 
 export interface ExtractedPluginDefinition {
   readonly span: SourceSpan;
+  readonly metadata?: PluginMetadata;
   readonly config?: BuildArgument;
   readonly dependencies?: Readonly<Record<string, BuildArgument>>;
   readonly providers: ReadonlyArray<BuildArgument>;
@@ -96,28 +101,9 @@ export async function extractPluginDefinition(
     }
 
     const evaluator = new StaticEvaluator(project.checker, options.classifySymbol);
-    const assignment = source.statements.find(
-      (statement): statement is ts.ExportAssignment =>
-        ts.isExportAssignment(statement) && !statement.isExportEquals,
-    );
-    if (assignment === undefined) {
-      throw evaluator.error(
-        source,
-        "Plugin module must have one default export",
-        source,
-      );
-    }
-    const call = unwrap(assignment.expression);
-    if (!ts.isCallExpression(call)) {
-      throw evaluator.error(call, "default export must call definePlugin", source);
-    }
-    const meaning = await evaluator.meaning(call.expression);
-    if (meaning?.kind !== "plugin_definition") {
-      throw evaluator.error(
-        call.expression,
-        "default export must call the generic definePlugin export",
-        source,
-      );
+    const call = await evaluator.pluginExport(source, options.exportName ?? "default");
+    if (call === undefined) {
+      throw evaluator.error(source, `${options.exportName ?? "default"} export must call the generic definePlugin export`, source);
     }
     if (call.arguments.length !== 1) {
       throw evaluator.error(
@@ -131,6 +117,7 @@ export async function extractPluginDefinition(
       stop: "handler",
     });
     const allowed = new Set([
+      "metadata",
       "config",
       "dependencies",
       "provides",
@@ -182,7 +169,8 @@ export async function extractPluginDefinition(
     );
 
     return Object.freeze({
-      span: span(call, source),
+      span: span(call, call.getSourceFile()),
+      ...(declaration.get("metadata") === undefined ? {} : { metadata: metadataValue(declaration.get("metadata")!, evaluator, source) }),
       ...(declaration.get("config") === undefined
         ? {}
         : { config: declaration.get("config")! }),
@@ -196,6 +184,126 @@ export async function extractPluginDefinition(
     });
   } finally {
     await api.close();
+  }
+}
+
+export interface PluginSourceInventoryEntry {
+  readonly plugin_id: string;
+  readonly release_version: string;
+  readonly root_slot: string;
+  /** Importable source/export pair, relative to the package root. */
+  readonly source_file: string;
+  readonly export_name: string;
+  /** Diagnostic location only; never part of source identity. */
+  readonly span: SourceSpan;
+}
+
+export interface PluginSourceInventory {
+  readonly api_version: 1;
+  readonly plugins: ReadonlyArray<PluginSourceInventoryEntry>;
+}
+
+/** Enumerates exported declarations without importing business code or reading handlers. */
+export async function extractPluginInventory(options: {
+  readonly packageRoot: string;
+  readonly entryFiles: ReadonlyArray<string>;
+  readonly releaseVersion?: string;
+  readonly classifySymbol?: ExtractionOptions["classifySymbol"];
+}): Promise<PluginSourceInventory> {
+  const root = realpathSync(options.packageRoot);
+  const files = [...new Set(options.entryFiles.map(file => {
+    const path = resolve(root, file);
+    if (!lstatSync(path).isFile()) throw new Error(`${path}: Plugin inventory source must be a regular file`);
+    return realpathSync(path);
+  }))].sort();
+  if (files.length > 256) throw new Error("Plugin inventory exceeds 256 source files");
+  for (const file of files) packageSource(root, file);
+  const api = new API({ cwd: root });
+  const plugins = new Map<string, PluginSourceInventoryEntry>();
+  const declarations = new Map<string, PluginSourceInventoryEntry>();
+  try {
+    const snapshot = await api.updateSnapshot({ openFiles: files });
+    for (const file of files) {
+      const project = await snapshot.getDefaultProjectForFile(file);
+      const source = await project?.program.getSourceFile(file);
+      if (project === undefined || source === undefined) {
+        throw new DeclarationExtractionError(`cannot resolve Plugin source ${file}`, { file, start: 0, end: 0 });
+      }
+      const diagnostic = (await project.program.getSyntacticDiagnostics(file))[0];
+      if (diagnostic !== undefined) throw diagnosticError(diagnostic, source);
+      const evaluator = new StaticEvaluator(project.checker, options.classifySymbol ?? classifyInventorySymbol);
+      for (const exportName of await evaluator.exportNames(source)) {
+        const call = await evaluator.pluginExport(source, exportName);
+        if (call === undefined) continue;
+        packageSource(root, realpathSync(call.getSourceFile().fileName));
+        const location = span(call, call.getSourceFile());
+        // An alias is one declaration, not a second Plugin. Offsets are only
+        // used inside this snapshot to recognize the same syntax node.
+        const declarationKey = `${location.file}:${location.start}:${location.end}`;
+        const alias = declarations.get(declarationKey);
+        if (alias !== undefined) {
+          // Prefer a declared defining module over a barrel even when a new
+          // barrel sorts first. The export pair remains stable when aliases
+          // are added; a barrel-only inventory still imports its own export.
+          if (file === location.file && resolve(root, alias.source_file) !== location.file) {
+            const direct = Object.freeze({ ...alias, source_file: packageSource(root, file), export_name: exportName });
+            declarations.set(declarationKey, direct);
+            plugins.set(direct.plugin_id, direct);
+          }
+          continue;
+        }
+        if (exportName.length === 0) throw evaluator.error(call, "Plugin inventory export name must not be empty", source);
+        if (call.arguments.length !== 1) throw evaluator.error(call, "definePlugin requires exactly one declaration object", source);
+        // Read metadata alone: unselected providers and lifecycle bodies are
+        // neither lowered nor executed during discovery.
+        const metadata = await evaluator.pluginMetadata(call.arguments[0]!);
+        const releaseVersion = metadata.releaseVersion ?? options.releaseVersion;
+        if (typeof releaseVersion !== "string" || releaseVersion.trim().length === 0) {
+          throw evaluator.error(call, "metadata.releaseVersion or an explicit package releaseVersion is required", source);
+        }
+        const entry = Object.freeze({
+          plugin_id: metadata.pluginId,
+          release_version: releaseVersion,
+          root_slot: metadata.rootSlot,
+          source_file: packageSource(root, file),
+          export_name: exportName,
+          span: location,
+        });
+        const previous = plugins.get(entry.plugin_id);
+        if (previous !== undefined) {
+          throw evaluator.error(call, `duplicate Plugin ID ${entry.plugin_id}; first declared at ${previous.span.file}:${previous.span.start}`, source);
+        }
+        plugins.set(entry.plugin_id, entry);
+        declarations.set(declarationKey, entry);
+      }
+    }
+    return Object.freeze({ api_version: 1, plugins: Object.freeze([...plugins.values()].sort((a, b) => a.plugin_id.localeCompare(b.plugin_id))) });
+  } finally {
+    await api.close();
+  }
+}
+
+function packageSource(root: string, file: string): string {
+  const path = relative(root, file);
+  if (!path || path === ".." || path.startsWith(`..${sep}`) || path.split(sep).includes("node_modules")) {
+    throw new Error(`${file}: Plugin inventory source must be inside its package root`);
+  }
+  return path.split(sep).join("/");
+}
+
+function classifyInventorySymbol(origin: SymbolOrigin): SymbolMeaning | undefined {
+  const directory = dirname(dirname(fileURLToPath(import.meta.url)));
+  if (origin.name === "definePlugin" && ["src/authoring.ts", "dist/authoring.d.ts"].some(name =>
+    realpathSync(origin.file) === resolve(directory, name))) return { kind: "plugin_definition" };
+  return undefined;
+}
+
+function metadataValue(argument: BuildArgument, evaluator: StaticEvaluator, source: ts.SourceFile): PluginMetadata {
+  const entries = requiredObject(argument, "metadata", evaluator, source);
+  try {
+    return validatePluginMetadata(Object.fromEntries([...entries].map(([key, item]) => [key, valuePayload(item, `metadata.${key}`, evaluator, source)])));
+  } catch (error) {
+    throw new DeclarationExtractionError(String(error instanceof Error ? error.message : error), argument.span);
   }
 }
 
@@ -213,6 +321,73 @@ class StaticEvaluator {
   ) {
     this.#checker = checker;
     this.#classify = classify;
+  }
+
+  async exportNames(source: ts.SourceFile): Promise<string[]> {
+    const symbol = await this.symbolFor(source);
+    if (symbol === undefined) return [];
+    const symbols = await this.#checker.getExportsOfModule(symbol);
+    // Prefer the defining name over an alias; adding a barrel alias must not
+    // replace an existing directly exported source identity.
+    const entries = await Promise.all(symbols.map(async exported => {
+      const target = await this.resolveSymbol(exported);
+      return { name: exported.name, direct: target?.name === exported.name };
+    }));
+    return entries.sort((a, b) => Number(b.direct) - Number(a.direct) || a.name.localeCompare(b.name)).map(entry => entry.name);
+  }
+
+  async pluginExport(source: ts.SourceFile, name: string): Promise<ts.CallExpression | undefined> {
+    const module = await this.symbolFor(source);
+    if (module === undefined) return undefined;
+    const exported = await this.#checker.getMemberInModuleExports(module, name);
+    const symbol = await this.resolveSymbol(exported);
+    return this.pluginSymbol(symbol, new Set());
+  }
+
+  private async pluginSymbol(symbol: TypeScriptSymbol | undefined, active: Set<TypeScriptSymbol>): Promise<ts.CallExpression | undefined> {
+    if (symbol === undefined) return undefined;
+    const reference = symbol.valueDeclaration ?? symbol.declarations[0];
+    let declaration = await reference?.resolve();
+    if (declaration !== undefined && ts.isIdentifier(declaration)) declaration = declaration.parent;
+    if (declaration === undefined) return undefined;
+    if (active.has(symbol)) throw this.error(declaration, "cyclic Plugin export", declaration.getSourceFile());
+    active.add(symbol);
+    const expression = ts.isExportAssignment(declaration) ? declaration.expression
+      : ts.isVariableDeclaration(declaration) ? declaration.initializer : undefined;
+    if (expression === undefined) return undefined;
+    const value = unwrap(expression);
+    const call = ts.isIdentifier(value)
+      ? await this.pluginSymbol(await this.resolveSymbol(await this.symbolFor(value)), active)
+      : ts.isCallExpression(value) && (await this.meaning(value.expression))?.kind === "plugin_definition"
+        ? value : undefined;
+    if (call !== undefined && ts.isVariableDeclaration(declaration) &&
+        (!ts.isVariableDeclarationList(declaration.parent) || (declaration.parent.flags & ts.NodeFlags.Const) === 0)) {
+      throw this.error(declaration, "Plugin export must be a const declaration", declaration.getSourceFile());
+    }
+    return call;
+  }
+
+  async pluginMetadata(expression: ts.Expression): Promise<PluginMetadata> {
+    const value = unwrap(expression);
+    const source = value.getSourceFile();
+    // Reuse the static evaluator for const/spread metadata values, but do not
+    // traverse unrelated Plugin fields or handler bodies.
+    if (!ts.isObjectLiteralExpression(value)) {
+      throw this.error(value, "inventory requires a definePlugin object literal", source);
+    }
+    let metadata: BuildArgument | undefined;
+    for (const property of value.properties) {
+      if (ts.isSpreadAssignment(property)) {
+        throw this.error(property, "inventory requires explicit Plugin fields; metadata values may use static spreads", source);
+      }
+      if (property.name !== undefined && propertyName(property.name, this, source) === "metadata") {
+        if (metadata !== undefined) throw this.error(property, "duplicate object key metadata", source);
+        if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) throw this.error(property, "metadata must be a static value", source);
+        metadata = await this.value(ts.isPropertyAssignment(property) ? property.initializer : property.name as ts.Identifier);
+      }
+    }
+    if (metadata === undefined) throw this.error(value, "exported definePlugin requires metadata for inventory", source);
+    return metadataValue(metadata, this, source);
   }
 
   async value(
@@ -689,4 +864,19 @@ function diagnosticError(
     diagnostic.text,
     { file, start, end: diagnostic.end },
   );
+}
+
+// Existing extract entrypoint doubles as a read-only inventory command. It
+// imports the SDK, never the supplied Plugin modules.
+if (import.meta.main) {
+  const [mode, packageRoot, ...entryFiles] = process.argv.slice(2);
+  if (mode !== "--inventory" || packageRoot === undefined || entryFiles.length === 0) {
+    throw new Error("expected --inventory <package-root> <source-file>...");
+  }
+  const manifest = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8")) as { version?: string };
+  const inventory = await extractPluginInventory({
+    packageRoot, entryFiles,
+    ...(manifest.version === undefined ? {} : { releaseVersion: manifest.version }),
+  });
+  console.log(JSON.stringify(inventory));
 }

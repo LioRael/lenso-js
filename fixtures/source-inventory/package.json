@@ -1,0 +1,7 @@
+{
+  "name": "lenso-source-inventory-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "lenso": { "sources": ["plugin.ts"] }
+}

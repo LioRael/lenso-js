@@ -16,6 +16,7 @@ test("published package exports build and extraction entrypoints", async () => {
   expect(build.runLowering).toBeFunction();
   expect(build.fingerprintBuildInputs).toBeFunction();
   expect(extract.extractPluginDefinition).toBeFunction();
+  expect(extract.extractPluginInventory).toBeFunction();
 });
 
 test("published pure authoring entry loads independently of Bun transport", async () => {

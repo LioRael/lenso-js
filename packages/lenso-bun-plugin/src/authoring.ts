@@ -12,6 +12,36 @@ import type {
   ProviderStreamOpenOutcome,
 } from "./index.js";
 
+/** Stable source identity; availability does not construct a Plugin Instance. */
+export interface PluginMetadata {
+  readonly pluginId: string;
+  readonly releaseVersion?: string;
+  readonly rootSlot: string;
+}
+
+/** Shared by runtime declarations and the read-only source extractor. */
+export function validatePluginMetadata(value: unknown): PluginMetadata {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("metadata must be a static object");
+  }
+  const metadata = value as Record<string, unknown>;
+  for (const key of Object.keys(metadata)) {
+    if (!["pluginId", "releaseVersion", "rootSlot"].includes(key)) {
+      throw new Error(`unknown metadata field ${key}`);
+    }
+  }
+  for (const key of ["pluginId", "rootSlot", ...(metadata.releaseVersion === undefined ? [] : ["releaseVersion"])]) {
+    if (typeof metadata[key] !== "string" || metadata[key].trim().length === 0) {
+      throw new Error(`metadata.${key} must be a nonempty string`);
+    }
+  }
+  return Object.freeze({
+    pluginId: metadata.pluginId as string,
+    rootSlot: metadata.rootSlot as string,
+    ...(metadata.releaseVersion === undefined ? {} : { releaseVersion: metadata.releaseVersion as string }),
+  });
+}
+
 /** A finite Host-owned scope used while constructing or stopping one instance. */
 export interface LifecycleContext extends InvocationContext {
   readonly signal: AbortSignal;
@@ -192,6 +222,7 @@ export type PluginDefinition<
     | DependencyDeclarations
     | undefined,
 > = DeclaredInputs<Config, Dependencies> & {
+  readonly metadata?: PluginMetadata;
   readonly providers: ReadonlyArray<PluginProvider<Instance>>;
   readonly create?: (
     inputs: object,
@@ -219,6 +250,7 @@ export type PluginOptionsWithCreate<
   Dependencies extends DependencyDeclarations | undefined,
   Factory extends (...arguments_: never[]) => object | Promise<object>,
 > = DeclaredInputs<Config, Dependencies> & DeclaredProviders<NoInfer<CreatedInstance<Factory>>> & {
+  readonly metadata?: PluginMetadata;
   readonly create: Factory &
     ((
       inputs: PluginInputs<Config, Dependencies>,
@@ -263,6 +295,7 @@ export function definePlugin(
   options: object,
 ): object {
   const candidate = options as {
+    readonly metadata?: PluginMetadata;
     readonly provides?: ReadonlyArray<CapabilityProviderContract<object>>;
     readonly providers?: ReadonlyArray<PluginProvider<object>>;
     readonly dependencies?: Readonly<Record<string, unknown>>;
@@ -273,6 +306,7 @@ export function definePlugin(
     readonly stop?: (...arguments_: never[]) => void | Promise<void>;
     readonly maxConcurrentRequests?: number;
   };
+  const metadata = candidate.metadata === undefined ? undefined : validatePluginMetadata(candidate.metadata);
   if ((candidate.provides === undefined) === (candidate.providers === undefined)) {
     throw new Error("definePlugin requires exactly one of provides or providers");
   }
@@ -371,6 +405,7 @@ export function definePlugin(
     throw new Error("configurationSchema must be a JSON Schema object or boolean");
   }
   return Object.freeze({
+    ...(metadata === undefined ? {} : { metadata }),
     ...(candidate.config === undefined ? {} : { config: candidate.config }),
     ...(candidate.dependencies === undefined
       ? {}
@@ -435,6 +470,7 @@ export type PluginOptionsWithDefaultInstance<
   Config extends ConfigDeclaration<unknown> | undefined,
   Dependencies extends DependencyDeclarations | undefined,
 > = DeclaredInputs<Config, Dependencies> & DeclaredProviders<NoInfer<PluginInputs<Config, Dependencies>>> & {
+  readonly metadata?: PluginMetadata;
   readonly create?: undefined;
   readonly stop?: (
     instance: NoInfer<PluginInputs<Config, Dependencies>>,

@@ -26,8 +26,9 @@ def main():
     parser.add_argument("--workerd", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--expect", default="hello")
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent)
     args = parser.parse_args()
-    root = Path(__file__).resolve().parent
+    root = args.root.resolve(strict=True)
     binary = args.workerd.resolve(strict=True)
     artifact = root / "dist/worker.mjs"
     evidence = {
