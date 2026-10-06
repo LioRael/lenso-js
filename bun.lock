@@ -30,7 +30,7 @@
     },
     "packages/lenso-bun-plugin": {
       "name": "@lenso/bun-plugin",
-      "version": "0.4.3",
+      "version": "0.4.4",
       "dependencies": {
         "@lenso/contract-runtime": "0.3.2",
         "@lenso/process-protocol": "0.2.4",
