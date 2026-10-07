@@ -89,7 +89,7 @@ export function createEventRunner({
       return Promise.reject(new DOMException("Request aborted", "AbortError"));
     if (unavailable)
       return Promise.reject(new Error("Wasm instance unavailable"));
-    if (admittedCount >= 96) {
+    if (admittedCount >= 96 || pending.size >= maxConcurrent) {
       if (!pending.size) {
         try {
           rotate();
@@ -98,30 +98,35 @@ export function createEventRunner({
         }
       } else {
         if (queued >= 32)
-          return Promise.reject(new Error("Rotation queue capacity exceeded"));
+          return Promise.reject(new Error("Event admission queue capacity exceeded"));
         queued++;
         // Each waiter owns its timer. A shared cross-request Promise can be
         // canceled by workerd when its creating request has no local I/O left.
         return (async () => {
           try {
             const deadline = Date.now() + eventLimitMs;
-            while (admittedCount >= 96 && pending.size) {
+            while (
+              (admittedCount >= 96 && pending.size) ||
+              pending.size >= maxConcurrent
+            ) {
               if (signal?.aborted)
                 throw new DOMException("Request aborted", "AbortError");
               if (unavailable) throw new Error("Wasm instance unavailable");
               if (Date.now() >= deadline)
-                throw new Error("Rotation admission deadline exceeded");
+                throw new Error("Event admission deadline exceeded");
               await new Promise((resolve) => setTimeout(resolve, 1));
             }
-            return await execute(operation, { scope, signal }, opened);
+            // Capacity may become free while this request's timer is delayed.
+            // Free space cannot renew an already expired admission budget.
+            if (Date.now() >= deadline)
+              throw new Error("Event admission deadline exceeded");
           } finally {
             queued--;
           }
+          return execute(operation, { scope, signal }, opened);
         })();
       }
     }
-    if (pending.size >= maxConcurrent)
-      return Promise.reject(new Error("Event capacity exceeded"));
     const admitted = generation;
     admittedCount++;
     let event;

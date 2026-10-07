@@ -10,6 +10,13 @@ JavaScript timer domain used by the `lenso-workers-driver` Rust crate. It does
 not resolve Plugins, grant network authority, authenticate, or authorize requests.
 The buffered HTTP Host entry is available starting with version 0.1.2.
 
+Event admission keeps at most 32 active events and 32 waiting events. A short
+burst waits for an active slot or generation retirement instead of immediately
+rejecting the first extra event. Each waiter owns its timer and is bounded by
+`eventLimitMs`; cancellation, an expired wait, or a full queue rejects before
+calling Wasm. Waiting does not retry an operation that has already started.
+The active-event limit and the generation's 96-admission ceiling are unchanged.
+
 The `0.1.6` source candidate adds `./facilities` for the normal Rust static
 Workers App profile, `lenso.linked-rust-workers@1`. The Rust CLI resolves and
 compiles that graph; this JavaScript package owns event scopes and the Host

@@ -21,6 +21,66 @@ const runner = (options) =>
     ...options,
   });
 
+test("burst admission stays bounded without rejecting the first extra event", async () => {
+  const runtime = runner({ maxConcurrent: 1 }), terminal = deferred();
+  const first = await runtime.open(() => ({ value: {}, closed: terminal.promise }));
+  let calls = 0;
+  const queued = Array.from({ length: 32 }, () => runtime.run(() => {
+    calls++;
+    return "{}";
+  }));
+  assert.equal(calls, 0);
+  await assert.rejects(runtime.run(() => assert.fail("overflow entered Wasm")), /admission queue capacity/);
+  terminal.resolve({ shutdown: "clean" });
+  await first.closed;
+  await Promise.all(queued);
+  assert.equal(calls, 32);
+  await runtime.run(() => "{}");
+});
+
+test("queued cancellation and deadline do not invoke Wasm or abandon active work", async () => {
+  const runtime = runner({ maxConcurrent: 1, eventLimitMs: 20 }), terminal = deferred();
+  const first = await runtime.open(() => ({ value: {}, closed: terminal.promise }));
+  const controller = new AbortController();
+  const cancelled = runtime.run(() => assert.fail("cancelled event entered Wasm"), { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(cancelled, { name: "AbortError" });
+  await assert.rejects(runtime.run(() => assert.fail("expired event entered Wasm")), /admission deadline exceeded/);
+  assert.equal(runtime.generation(), 1);
+  terminal.resolve({ shutdown: "clean" });
+  await first.closed;
+  await runtime.run(() => "{}");
+});
+
+test("an unstarted queued event enters only the fresh generation after failure", async () => {
+  const runtime = runner({ maxConcurrent: 1 }), terminal = deferred();
+  const first = await runtime.open(() => ({ value: {}, closed: terminal.promise }));
+  let calls = 0;
+  const queued = runtime.run(() => { calls++; return "{}"; });
+  const rejected = assert.rejects(first.closed, /abandoned/);
+  terminal.reject(new Error("cleanup failed"));
+  await rejected;
+  const result = await queued;
+  assert.equal(result.generation, 2);
+  assert.equal(calls, 1);
+  assert.throws(() => first.invoke(() => assert.fail("old generation entered")), /session_closed/);
+});
+
+test("free capacity does not revive a waiter whose timer resumed after its deadline", async (t) => {
+  let now = 0;
+  t.mock.method(Date, "now", () => now);
+  const runtime = runner({ maxConcurrent: 1, eventLimitMs: 20 }), terminal = deferred();
+  const first = await runtime.open(() => ({ value: {}, closed: terminal.promise }));
+  const queued = runtime.run(() => assert.fail("expired event entered Wasm"));
+  const expired = assert.rejects(queued, /admission deadline exceeded/);
+  now = 21;
+  terminal.resolve({ shutdown: "clean" });
+  await first.closed;
+  await expired;
+  assert.equal(runtime.generation(), 1);
+  await runtime.run(() => "{}");
+});
+
 test("headers do not retire a generation; clean terminal receipt closes its lease", async () => {
   const runtime = runner({ retirementAdmissionLimit: 1 }),
     terminal = deferred(),

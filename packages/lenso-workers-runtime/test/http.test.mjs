@@ -173,13 +173,15 @@ test("consumer admission limit and retirement retain the fixed generation ceilin
         finish = resolve;
       }),
   );
-  await assert.rejects(
-    runner.run(() => "{}"),
-    /Event capacity exceeded/,
-  );
+  let queuedCalls = 0;
+  const second = runner.run(() => { queuedCalls++; return "{}"; });
+  assert.equal(queuedCalls, 0, "A queued event cannot enter Wasm while capacity is full");
   finish("{}");
   await first;
   assert.equal(runner.generation(), 2);
+  await second;
+  assert.equal(queuedCalls, 1);
+  assert.equal(runner.generation(), 3);
 });
 
 test("normal operation with unconfirmed storage fences late callbacks before retirement", async () => {
